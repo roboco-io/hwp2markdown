@@ -1,0 +1,21 @@
+#!/bin/bash
+# Pre-push hook for hwp2markdown
+# Runs tests before allowing push
+
+set -e
+
+echo "Running pre-push checks..."
+
+# Run linting
+echo "==> Running lint..."
+if command -v golangci-lint &> /dev/null; then
+    golangci-lint run --timeout 5m
+else
+    echo "Warning: golangci-lint not installed, skipping lint"
+fi
+
+# Run tests
+echo "==> Running tests..."
+go test -v -race ./...
+
+echo "All pre-push checks passed!"
