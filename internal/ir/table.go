@@ -2,12 +2,12 @@ package ir
 
 // TableBlock represents a table region in the document.
 type TableBlock struct {
-	Rows     int        `json:"rows"`
-	Cols     int        `json:"cols"`
-	Cells    [][]Cell   `json:"cells,omitempty"`
-	RawText  string     `json:"raw_text,omitempty"`  // fallback: tab/newline separated text
-	Caption  string     `json:"caption,omitempty"`   // table caption if any
-	HasHeader bool      `json:"has_header,omitempty"` // first row is header
+	Rows      int      `json:"rows"`
+	Cols      int      `json:"cols"`
+	Cells     [][]Cell `json:"cells,omitempty"`
+	RawText   string   `json:"raw_text,omitempty"`   // fallback: tab/newline separated text
+	Caption   string   `json:"caption,omitempty"`    // table caption if any
+	HasHeader bool     `json:"has_header,omitempty"` // first row is header
 }
 
 // Cell represents a single cell in a table.

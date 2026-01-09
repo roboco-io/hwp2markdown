@@ -13,11 +13,11 @@ import (
 )
 
 var (
-	extractOutput        string
-	extractFormat        string
-	extractImagesFlag    bool
-	extractImagesDir     string
-	extractPrettyPrint   bool
+	extractOutput      string
+	extractFormat      string
+	extractImagesFlag  bool
+	extractImagesDir   string
+	extractPrettyPrint bool
 )
 
 var extractCmd = &cobra.Command{

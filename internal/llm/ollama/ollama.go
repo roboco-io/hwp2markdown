@@ -113,13 +113,13 @@ type ChatOptions struct {
 
 // ChatResponse represents the Ollama chat API response.
 type ChatResponse struct {
-	Model     string      `json:"model"`
-	Message   ChatMessage `json:"message"`
-	Done      bool        `json:"done"`
-	TotalDuration    int64 `json:"total_duration,omitempty"`
-	LoadDuration     int64 `json:"load_duration,omitempty"`
-	PromptEvalCount  int   `json:"prompt_eval_count,omitempty"`
-	EvalCount        int   `json:"eval_count,omitempty"`
+	Model           string      `json:"model"`
+	Message         ChatMessage `json:"message"`
+	Done            bool        `json:"done"`
+	TotalDuration   int64       `json:"total_duration,omitempty"`
+	LoadDuration    int64       `json:"load_duration,omitempty"`
+	PromptEvalCount int         `json:"prompt_eval_count,omitempty"`
+	EvalCount       int         `json:"eval_count,omitempty"`
 }
 
 // Format converts an IR document to formatted Markdown using Ollama.

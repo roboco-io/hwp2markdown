@@ -190,7 +190,6 @@ func (p *Parser) parseSection(doc *ir.Document, sectionPath string) error {
 // parseSectionXML parses the section XML content.
 func (p *Parser) parseSectionXML(doc *ir.Document, decoder *xml.Decoder) error {
 	var currentParagraph *ir.Paragraph
-	var currentTable *ir.TableBlock
 	var currentCell *cellContext
 	var inTable bool
 	var tableRows [][]cellContext
@@ -212,12 +211,7 @@ func (p *Parser) parseSectionXML(doc *ir.Document, decoder *xml.Decoder) error {
 			switch localName {
 			case "p":
 				currentParagraph = ir.NewParagraph("")
-				// Check for outline level (heading)
-				for _, attr := range t.Attr {
-					if attr.Name.Local == "styleIDRef" {
-						// Will be processed with style info
-					}
-				}
+				// styleIDRef attribute is available for future style processing
 
 			case "t":
 				// Text element - read content
@@ -259,7 +253,6 @@ func (p *Parser) parseSectionXML(doc *ir.Document, decoder *xml.Decoder) error {
 			case "tbl":
 				inTable = true
 				tableRows = nil
-				currentTable = nil
 
 			case "tr":
 				if inTable {
@@ -268,20 +261,18 @@ func (p *Parser) parseSectionXML(doc *ir.Document, decoder *xml.Decoder) error {
 
 			case "tc":
 				if inTable {
-					cell := cellContext{}
+					cell := cellContext{colSpan: 1, rowSpan: 1}
 					for _, attr := range t.Attr {
 						switch attr.Name.Local {
 						case "gridSpan":
-							fmt.Sscanf(attr.Value, "%d", &cell.colSpan)
+							if _, err := fmt.Sscanf(attr.Value, "%d", &cell.colSpan); err != nil {
+								cell.colSpan = 1
+							}
 						case "rowSpan":
-							fmt.Sscanf(attr.Value, "%d", &cell.rowSpan)
+							if _, err := fmt.Sscanf(attr.Value, "%d", &cell.rowSpan); err != nil {
+								cell.rowSpan = 1
+							}
 						}
-					}
-					if cell.colSpan == 0 {
-						cell.colSpan = 1
-					}
-					if cell.rowSpan == 0 {
-						cell.rowSpan = 1
 					}
 					currentCell = &cell
 				}
@@ -329,12 +320,11 @@ func (p *Parser) parseSectionXML(doc *ir.Document, decoder *xml.Decoder) error {
 
 			case "tbl":
 				if len(tableRows) > 0 {
-					currentTable = p.buildTable(tableRows)
-					doc.AddTable(currentTable)
+					table := p.buildTable(tableRows)
+					doc.AddTable(table)
 				}
 				inTable = false
 				tableRows = nil
-				currentTable = nil
 			}
 		}
 	}
@@ -403,9 +393,9 @@ func (p *Parser) parseImage(elem xml.StartElement) *ir.ImageBlock {
 		case "alt", "descr":
 			img.Alt = attr.Value
 		case "width":
-			fmt.Sscanf(attr.Value, "%d", &img.Width)
+			_, _ = fmt.Sscanf(attr.Value, "%d", &img.Width)
 		case "height":
-			fmt.Sscanf(attr.Value, "%d", &img.Height)
+			_, _ = fmt.Sscanf(attr.Value, "%d", &img.Height)
 		}
 	}
 

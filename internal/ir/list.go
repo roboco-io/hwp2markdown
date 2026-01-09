@@ -2,9 +2,9 @@ package ir
 
 // ListBlock represents a list (ordered or unordered) in the document.
 type ListBlock struct {
-	Ordered bool       `json:"ordered"`          // true = numbered list, false = bullet list
+	Ordered bool       `json:"ordered"` // true = numbered list, false = bullet list
 	Items   []ListItem `json:"items"`
-	Start   int        `json:"start,omitempty"`  // starting number for ordered lists
+	Start   int        `json:"start,omitempty"` // starting number for ordered lists
 }
 
 // ListItem represents a single item in a list.

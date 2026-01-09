@@ -2,15 +2,15 @@ package ir
 
 // ImageBlock represents an image reference in the document.
 type ImageBlock struct {
-	ID       string `json:"id"`                 // internal image ID
-	Path     string `json:"path,omitempty"`     // extracted file path
+	ID       string `json:"id"`                  // internal image ID
+	Path     string `json:"path,omitempty"`      // extracted file path
 	OrigName string `json:"orig_name,omitempty"` // original filename
-	Alt      string `json:"alt,omitempty"`      // alt text
-	Caption  string `json:"caption,omitempty"`  // image caption
-	Width    int    `json:"width,omitempty"`    // width in pixels
-	Height   int    `json:"height,omitempty"`   // height in pixels
-	Format   string `json:"format,omitempty"`   // png, jpg, gif, bmp, etc.
-	Data     []byte `json:"-"`                  // raw image data (not serialized)
+	Alt      string `json:"alt,omitempty"`       // alt text
+	Caption  string `json:"caption,omitempty"`   // image caption
+	Width    int    `json:"width,omitempty"`     // width in pixels
+	Height   int    `json:"height,omitempty"`    // height in pixels
+	Format   string `json:"format,omitempty"`    // png, jpg, gif, bmp, etc.
+	Data     []byte `json:"-"`                   // raw image data (not serialized)
 }
 
 // NewImage creates a new image block with the given ID.
