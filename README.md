@@ -45,11 +45,14 @@ go install github.com/roboco-io/hwp2markdown/cmd/hwp2markdown@latest
 
 ```bash
 # HWPX 파일을 Markdown으로 변환
-hwp2markdown convert document.hwpx -o output.md
+hwp2markdown document.hwpx -o output.md
 
 # 표준 출력으로 변환
-hwp2markdown convert document.hwpx
+hwp2markdown document.hwpx
 ```
+
+> **Note**: `convert` 명령어는 기본 명령이므로 생략할 수 있습니다.
+> `hwp2markdown document.hwpx`와 `hwp2markdown convert document.hwpx`는 동일합니다.
 
 ### LLM 포맷팅 (Stage 2)
 
