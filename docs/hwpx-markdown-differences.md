@@ -30,9 +30,29 @@ HWPX는 한글 워드프로세서의 XML 기반 포맷으로, Markdown보다 훨
 |------|------|
 | **HWPX** | `cellSpan`, `rowSpan` 속성으로 셀 병합 지원 |
 | **Markdown** | 표준 Markdown은 셀 병합 미지원 |
-| **변환 방식** | 병합된 셀의 내용을 첫 번째 셀에 포함, 병합 영역의 다른 셀은 빈 셀로 처리 |
+| **변환 방식** | 세로 병합(rowspan)은 `〃` 표시, 가로 병합(colspan)은 빈 셀로 처리 |
 
-**관련 코드:** `internal/parser/hwpx/parser.go` - `cellSpan` 파싱 로직
+**예시:**
+
+원본 HWPX (2x2 셀이 세로로 병합된 경우):
+```
+| 항목 | 값1 |
+|      | 값2 |
+```
+
+변환된 Markdown:
+```
+| 항목 | 값1 |
+| 〃   | 값2 |
+```
+
+**설계 결정:**
+- 세로 병합: `〃` (동일 부호) - 위 셀과 같은 내용임을 시각적으로 표시
+- 가로 병합: 빈 셀 유지 - 테이블 구조 보존
+
+**관련 코드:**
+- `internal/parser/hwpx/parser.go` - `cellSpan` 파싱 로직
+- `internal/cli/convert.go` - `writeMarkdownTable()` 함수
 
 ---
 
