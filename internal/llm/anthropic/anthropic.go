@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	// DefaultModel is the default Anthropic model.
-	DefaultModel = "claude-3-5-sonnet-20241022"
+	// DefaultModel is the default Anthropic model (Claude Sonnet 4.5).
+	DefaultModel = "claude-sonnet-4-5-20250929"
 	// ProviderName is the provider identifier.
 	ProviderName = "anthropic"
 )
@@ -54,7 +54,7 @@ func New(cfg Config) (*Provider, error) {
 
 	timeout := cfg.Timeout
 	if timeout == 0 {
-		timeout = 60 * time.Second
+		timeout = 180 * time.Second // 3 minutes for large documents
 	}
 
 	opts := []option.RequestOption{

@@ -274,11 +274,65 @@ func writeMarkdownTable(sb *strings.Builder, t *ir.TableBlock) {
 		return
 	}
 
-	// Write rows
+	// Check if this is an "info-box" style table that should be converted to list format
+	if isInfoBoxTable(t) {
+		writeInfoBoxAsText(sb, t)
+		return
+	}
+
+	numCols := t.Cols
+	numRows := len(t.Cells)
+
+	// Build a grid that tracks which cells are occupied by rowSpan
+	// occupiedBy[row][col] points to the original cell (row, col) that occupies this position
+	type cellRef struct {
+		row, col int
+	}
+	occupiedBy := make([][]cellRef, numRows)
+	for i := range occupiedBy {
+		occupiedBy[i] = make([]cellRef, numCols)
+		for j := range occupiedBy[i] {
+			occupiedBy[i][j] = cellRef{-1, -1}
+		}
+	}
+
+	// Mark cells based on rowSpan and colSpan
 	for i, row := range t.Cells {
+		for j, cell := range row {
+			if occupiedBy[i][j].row == -1 {
+				// This cell is not occupied, mark it and its span area
+				rowSpan := cell.RowSpan
+				if rowSpan < 1 {
+					rowSpan = 1
+				}
+				colSpan := cell.ColSpan
+				if colSpan < 1 {
+					colSpan = 1
+				}
+
+				for r := i; r < i+rowSpan && r < numRows; r++ {
+					for c := j; c < j+colSpan && c < numCols; c++ {
+						occupiedBy[r][c] = cellRef{i, j}
+					}
+				}
+			}
+		}
+	}
+
+	// Write rows
+	for i := range t.Cells {
 		sb.WriteString("|")
-		for _, cell := range row {
-			text := strings.ReplaceAll(cell.Text, "\n", " ")
+		for j := 0; j < numCols; j++ {
+			ref := occupiedBy[i][j]
+			var text string
+			if ref.row == i && ref.col == j {
+				// This is the original cell
+				text = strings.ReplaceAll(t.Cells[i][j].Text, "\n", " ")
+			} else {
+				// This cell is covered by a span from another cell
+				// Leave empty for Markdown compatibility
+				text = ""
+			}
 			sb.WriteString(fmt.Sprintf(" %s |", text))
 		}
 		sb.WriteString("\n")
@@ -286,13 +340,120 @@ func writeMarkdownTable(sb *strings.Builder, t *ir.TableBlock) {
 		// Write separator after header row
 		if i == 0 {
 			sb.WriteString("|")
-			for range row {
+			for j := 0; j < numCols; j++ {
 				sb.WriteString(" --- |")
 			}
 			sb.WriteString("\n")
 		}
 	}
 	sb.WriteString("\n")
+}
+
+// isInfoBoxTable detects "info-box" style tables that should be converted to text format.
+// Pattern: A table with a title cell (containing brackets like [제목]) and a single content cell
+// that spans the full width and contains bullet-like content (○, ※, -, etc.)
+func isInfoBoxTable(t *ir.TableBlock) bool {
+	if len(t.Cells) < 2 || t.Cols < 2 {
+		return false
+	}
+
+	// Look for a title cell with brackets pattern like [고려사항]
+	var hasTitle bool
+	var titleText string
+	for _, row := range t.Cells {
+		for _, cell := range row {
+			text := strings.TrimSpace(cell.Text)
+			if strings.HasPrefix(text, "[") && strings.HasSuffix(text, "]") {
+				hasTitle = true
+				titleText = text
+				break
+			}
+		}
+		if hasTitle {
+			break
+		}
+	}
+
+	if !hasTitle {
+		return false
+	}
+
+	// Check if the last row has a cell that spans full width with bullet content
+	lastRow := t.Cells[len(t.Cells)-1]
+	for _, cell := range lastRow {
+		if cell.ColSpan >= t.Cols-1 {
+			text := strings.TrimSpace(cell.Text)
+			// Check for bullet-like patterns
+			if strings.Contains(text, "○") || strings.Contains(text, "※") ||
+				strings.HasPrefix(text, "-") || strings.Contains(titleText, "고려사항") ||
+				strings.Contains(titleText, "참고") || strings.Contains(titleText, "안내") {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// writeInfoBoxAsText converts an info-box table to readable text format
+func writeInfoBoxAsText(sb *strings.Builder, t *ir.TableBlock) {
+	// Find and write title
+	var title string
+	for _, row := range t.Cells {
+		for _, cell := range row {
+			text := strings.TrimSpace(cell.Text)
+			if strings.HasPrefix(text, "[") && strings.HasSuffix(text, "]") {
+				title = text
+				break
+			}
+		}
+		if title != "" {
+			break
+		}
+	}
+
+	if title != "" {
+		sb.WriteString("**" + title + "**\n\n")
+	}
+
+	// Find and write content from the last row (usually the full-width content cell)
+	lastRow := t.Cells[len(t.Cells)-1]
+	for _, cell := range lastRow {
+		text := strings.TrimSpace(cell.Text)
+		if text == "" {
+			continue
+		}
+
+		// Process the content: convert ○ to bullet points, ※ to indented notes
+		lines := strings.Split(text, "○")
+		for i, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+
+			if i == 0 && !strings.HasPrefix(text, "○") {
+				// First part before any ○, write as-is
+				sb.WriteString(line + "\n\n")
+			} else {
+				// Convert ○ items to bullet points
+				// Split by ※ for sub-notes
+				parts := strings.Split(line, "※")
+				for j, part := range parts {
+					part = strings.TrimSpace(part)
+					if part == "" {
+						continue
+					}
+					if j == 0 {
+						sb.WriteString("- " + part + "\n")
+					} else {
+						sb.WriteString("  - ※ " + part + "\n")
+					}
+				}
+			}
+		}
+		sb.WriteString("\n")
+	}
 }
 
 func writeMarkdownImage(sb *strings.Builder, img *ir.ImageBlock) {

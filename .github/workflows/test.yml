@@ -36,6 +36,35 @@ jobs:
         if: runner.os == 'Windows'
         run: go test -v -race ./...
 
+  # E2E tests with LLM (runs only when API keys are available)
+  e2e-llm:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Run E2E tests with LLM
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ]; then
+            echo "Running E2E tests with LLM..."
+            go test -v -race ./tests/... -run "E2E"
+          else
+            echo "Skipping LLM E2E tests (no API key)"
+          fi
+
   lint:
     runs-on: ubuntu-latest
     steps:

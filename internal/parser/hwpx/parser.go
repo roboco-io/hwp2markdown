@@ -262,19 +262,25 @@ func (p *Parser) parseSectionXML(doc *ir.Document, decoder *xml.Decoder) error {
 			case "tc":
 				if inTable {
 					cell := cellContext{colSpan: 1, rowSpan: 1}
+					// Note: colSpan and rowSpan are parsed from child cellSpan element
+					currentCell = &cell
+				}
+
+			case "cellSpan":
+				// Parse cell span information (colSpan and rowSpan)
+				if currentCell != nil {
 					for _, attr := range t.Attr {
 						switch attr.Name.Local {
-						case "gridSpan":
-							if _, err := fmt.Sscanf(attr.Value, "%d", &cell.colSpan); err != nil {
-								cell.colSpan = 1
+						case "colSpan":
+							if _, err := fmt.Sscanf(attr.Value, "%d", &currentCell.colSpan); err != nil {
+								currentCell.colSpan = 1
 							}
 						case "rowSpan":
-							if _, err := fmt.Sscanf(attr.Value, "%d", &cell.rowSpan); err != nil {
-								cell.rowSpan = 1
+							if _, err := fmt.Sscanf(attr.Value, "%d", &currentCell.rowSpan); err != nil {
+								currentCell.rowSpan = 1
 							}
 						}
 					}
-					currentCell = &cell
 				}
 
 			case "pic", "img":
@@ -340,34 +346,91 @@ type cellContext struct {
 }
 
 // buildTable constructs an IR table from parsed rows.
+// It properly handles rowSpan and colSpan to create a normalized table grid.
 func (p *Parser) buildTable(rows [][]cellContext) *ir.TableBlock {
 	if len(rows) == 0 {
 		return nil
 	}
 
-	// Find max columns
+	numRows := len(rows)
+
+	// Two-pass approach:
+	// Pass 1: Calculate actual column count by simulating cell placement
+	// Pass 2: Place cells into the table
+
+	// Pass 1: Calculate maxCols by simulating placement with rowSpan tracking
+	tempOccupied := make([][]bool, numRows)
+	for i := range tempOccupied {
+		tempOccupied[i] = make([]bool, 100) // Use large initial size
+	}
+
 	maxCols := 0
-	for _, row := range rows {
-		cols := 0
+	for rowIdx, row := range rows {
+		colIdx := 0
 		for _, cell := range row {
-			cols += cell.colSpan
-		}
-		if cols > maxCols {
-			maxCols = cols
+			// Skip occupied columns
+			for colIdx < 100 && tempOccupied[rowIdx][colIdx] {
+				colIdx++
+			}
+			if colIdx >= 100 {
+				break
+			}
+
+			// Mark cells occupied by this cell's rowSpan and colSpan
+			for r := rowIdx; r < rowIdx+cell.rowSpan && r < numRows; r++ {
+				for c := colIdx; c < colIdx+cell.colSpan && c < 100; c++ {
+					tempOccupied[r][c] = true
+				}
+			}
+
+			colIdx += cell.colSpan
+			if colIdx > maxCols {
+				maxCols = colIdx
+			}
 		}
 	}
 
-	table := ir.NewTable(len(rows), maxCols)
+	if maxCols == 0 {
+		return nil
+	}
 
-	for i, row := range rows {
+	// Create the properly sized occupied grid
+	occupiedGrid := make([][]bool, numRows)
+	for i := range occupiedGrid {
+		occupiedGrid[i] = make([]bool, maxCols)
+	}
+
+	table := ir.NewTable(numRows, maxCols)
+
+	// Pass 2: Place cells and mark occupied cells from rowSpan
+	for rowIdx, row := range rows {
 		colIdx := 0
-		for _, cell := range row {
-			if colIdx < maxCols {
-				table.Cells[i][colIdx].Text = strings.TrimSpace(cell.text.String())
-				table.Cells[i][colIdx].ColSpan = cell.colSpan
-				table.Cells[i][colIdx].RowSpan = cell.rowSpan
-				colIdx += cell.colSpan
+		cellIdx := 0
+
+		for colIdx < maxCols && cellIdx < len(row) {
+			// Skip columns occupied by rowSpan from previous rows
+			for colIdx < maxCols && occupiedGrid[rowIdx][colIdx] {
+				colIdx++
 			}
+
+			if colIdx >= maxCols || cellIdx >= len(row) {
+				break
+			}
+
+			cell := row[cellIdx]
+			table.Cells[rowIdx][colIdx].Text = strings.TrimSpace(cell.text.String())
+			table.Cells[rowIdx][colIdx].ColSpan = cell.colSpan
+			table.Cells[rowIdx][colIdx].RowSpan = cell.rowSpan
+
+			// Mark cells occupied by this cell's rowSpan and colSpan
+			for r := rowIdx; r < rowIdx+cell.rowSpan && r < numRows; r++ {
+				for c := colIdx; c < colIdx+cell.colSpan && c < maxCols; c++ {
+					occupiedGrid[r][c] = true
+				}
+			}
+
+			colIdx += cell.colSpan
+			cellIdx++
 		}
 	}
 
@@ -463,8 +526,10 @@ func (p *Parser) ExtractImages(dir string) ([]ir.ImageBlock, error) {
 }
 
 // readElementText reads text content until the current element ends.
+// It handles nested elements like <hp:fwSpace/> (full-width space) and <hp:hwSpace/> (half-width space).
 func readElementText(decoder *xml.Decoder) (string, error) {
 	var text strings.Builder
+	depth := 1 // Track element nesting depth
 
 	for {
 		token, err := decoder.Token()
@@ -475,8 +540,20 @@ func readElementText(decoder *xml.Decoder) (string, error) {
 		switch t := token.(type) {
 		case xml.CharData:
 			text.Write(t)
+		case xml.StartElement:
+			// Handle special whitespace elements
+			switch t.Name.Local {
+			case "fwSpace": // Full-width space
+				text.WriteString(" ")
+			case "hwSpace": // Half-width space
+				text.WriteString(" ")
+			}
+			depth++
 		case xml.EndElement:
-			return text.String(), nil
+			depth--
+			if depth == 0 {
+				return text.String(), nil
+			}
 		}
 	}
 }

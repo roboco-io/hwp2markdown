@@ -1,4 +1,4 @@
-.PHONY: build test lint clean release install
+.PHONY: build test test-e2e lint clean release install hooks
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags="-s -w -X main.version=$(VERSION)"
@@ -10,6 +10,9 @@ build:
 test:
 	go test -v -race -cover ./...
 
+test-e2e:
+	go test -v -race ./tests/... -run "E2E"
+
 lint:
 	golangci-lint run
 
@@ -17,7 +20,10 @@ clean:
 	rm -rf bin/ dist/
 
 install: build
-	cp bin/$(BINARY) $(GOPATH)/bin/
+	cp bin/$(BINARY) $(or $(GOPATH),$(HOME)/go)/bin/
+
+hooks:
+	./scripts/install-hooks.sh
 
 release: clean
 	mkdir -p dist
