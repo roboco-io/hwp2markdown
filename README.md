@@ -13,12 +13,42 @@ HWP(한글 워드프로세서) 문서를 Markdown으로 변환하는 CLI 도구
 
 ### 아키텍처
 
-```
-HWP/HWPX → [Stage 1: Parser] → IR (JSON) → [Stage 2: LLM] → Markdown
+```mermaid
+flowchart LR
+    subgraph Input
+        HWP[HWP/HWPX 문서]
+    end
+
+    subgraph Stage1[Stage 1: Parser]
+        HWPX[HWPX Parser]
+        IR[IR - 중간 표현]
+        HWPX --> IR
+    end
+
+    subgraph Stage2[Stage 2: LLM - 선택적]
+        LLM{LLM Provider}
+        LLM --> |Anthropic| Claude
+        LLM --> |OpenAI| GPT
+        LLM --> |Google| Gemini
+        LLM --> |Upstage| Solar
+        LLM --> |Local| Ollama
+    end
+
+    subgraph Output
+        MD1[기본 Markdown]
+        MD2[향상된 Markdown]
+    end
+
+    HWP --> HWPX
+    IR --> MD1
+    IR -.-> LLM
+    LLM -.-> MD2
 ```
 
-- **Stage 1 (Parser)**: 문서를 파싱하여 중간 표현(IR)으로 변환
-- **Stage 2 (LLM)**: LLM을 사용하여 IR을 깔끔한 Markdown으로 포맷팅 (선택적)
+| Stage | 설명 | 출력 |
+|-------|------|------|
+| **Stage 1 (Parser)** | 문서를 파싱하여 중간 표현(IR)으로 변환 | 구조화된 기본 Markdown |
+| **Stage 2 (LLM)** | LLM을 사용하여 IR을 깔끔한 Markdown으로 포맷팅 | 가독성이 향상된 Markdown |
 
 Stage 1만으로도 기본적인 변환이 가능하지만, 복잡한 레이아웃의 문서는 Stage 2(LLM)를 통해 가독성을 크게 향상시킬 수 있습니다.
 
