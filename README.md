@@ -9,7 +9,7 @@ HWP(한글 워드프로세서) 문서를 Markdown으로 변환하는 CLI 도구
 
 ## 개요
 
-이 프로젝트는 HWP/HWPX 문서를 Markdown으로 변환합니다. 2단계 파이프라인 아키텍처를 사용하여 정확하고 읽기 쉬운 Markdown을 생성합니다.
+이 프로젝트는 HWP/HWPX 문서를 Markdown으로 변환합니다. HWP는 복잡한 테이블 레이아웃, 중첩 표, 다단 구성 등 Markdown에서 직접 표현하기 어려운 구조를 포함할 수 있습니다. 이러한 구조적 차이를 극복하기 위해 2단계 파이프라인 아키텍처를 사용하며, 필요시 LLM을 활용하여 더 읽기 쉬운 Markdown을 생성합니다.
 
 ### 아키텍처
 
@@ -19,6 +19,8 @@ HWP/HWPX → [Stage 1: Parser] → IR (JSON) → [Stage 2: LLM] → Markdown
 
 - **Stage 1 (Parser)**: 문서를 파싱하여 중간 표현(IR)으로 변환
 - **Stage 2 (LLM)**: LLM을 사용하여 IR을 깔끔한 Markdown으로 포맷팅 (선택적)
+
+Stage 1만으로도 기본적인 변환이 가능하지만, 복잡한 레이아웃의 문서는 Stage 2(LLM)를 통해 가독성을 크게 향상시킬 수 있습니다.
 
 ## 설치
 
