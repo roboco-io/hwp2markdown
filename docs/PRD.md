@@ -15,18 +15,213 @@ HWP(한글 워드프로세서) 문서를 Markdown으로 변환하는 오픈소�
   - `unhwp` (Rust): 변환 품질 문제 (불필요한 HTML 태그, 스타일 정보 손실)
   - `hwpjs`: JSON까지만 파싱, Markdown 변환 미지원
   - 상용 서비스: 외부 의존성, 비용, 프라이버시 우려
+- **복잡한 레이아웃(표, 다단, 양식)의 완벽한 변환은 기술적으로 어려움**
+  - 텍스트 추출 후 LLM을 활용한 포맷팅이 더 효과적
 
 ### 1.4 목표
-- HWPX 및 HWP 5.x 포맷의 Markdown 변환 지원
-- 텍스트, 표, 이미지, 스타일 등 주요 요소의 정확한 변환
+- HWPX 및 HWP 5.x 포맷의 텍스트 추출 및 기본 Markdown 변환 지원
+- **2단계 파이프라인**: 텍스트 추출 → LLM 포맷팅
+- **LLM 플러그인 아키텍처**: OpenAI, Anthropic, Gemini 등 다양한 LLM 지원
 - CLI 및 라이브러리 형태로 제공
 - MIT 라이선스 오픈소스
 
 ---
 
-## 2. 사용자 및 사용 사례
+## 2. 핵심 아키텍처
 
-### 2.1 대상 사용자
+### 2.1 2단계 파이프라인
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        hwp2markdown Pipeline                         │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   Stage 1: Extraction                 Stage 2: Formatting           │
+│   ┌─────────────────────┐            ┌─────────────────────┐       │
+│   │                     │            │                     │       │
+│   │   HWP/HWPX Parser   │ ────────▶  │   LLM Formatter     │       │
+│   │                     │            │                     │       │
+│   │   - Text extraction │   Raw      │   - Structure       │       │
+│   │   - Style hints     │   Text +   │     recognition     │       │
+│   │   - Table markers   │   Hints    │   - Table formatting│       │
+│   │   - Image refs      │            │   - Markdown output │       │
+│   │                     │            │                     │       │
+│   └─────────────────────┘            └─────────────────────┘       │
+│           │                                    │                    │
+│           ▼                                    ▼                    │
+│   ┌─────────────────────┐            ┌─────────────────────┐       │
+│   │  Intermediate       │            │  Final Markdown     │       │
+│   │  Representation     │            │  Output             │       │
+│   └─────────────────────┘            └─────────────────────┘       │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 2.2 각 단계의 역할
+
+| 단계 | 역할 | 입력 | 출력 |
+|------|------|------|------|
+| **Stage 1** (Parser) | 텍스트 추출 + 구조 힌트 | HWP/HWPX 파일 | Intermediate Representation |
+| **Stage 2** (LLM) | 문맥 이해 + 구조화 | Intermediate Representation | 최종 Markdown |
+
+### 2.3 Intermediate Representation (IR)
+
+Stage 1에서 출력하는 중간 표현:
+
+```json
+{
+  "version": "1.0",
+  "metadata": {
+    "title": "문서 제목",
+    "author": "작성자",
+    "created": "2024-01-01"
+  },
+  "content": [
+    {
+      "type": "paragraph",
+      "text": "일반 텍스트 내용",
+      "style": {
+        "heading_level": 0,
+        "bold": false,
+        "italic": false
+      }
+    },
+    {
+      "type": "table_region",
+      "hint": "표 영역 (3x4 추정)",
+      "raw_text": "열1\t열2\t열3\n값1\t값2\t값3\n..."
+    },
+    {
+      "type": "image",
+      "path": "images/image001.png",
+      "alt": ""
+    },
+    {
+      "type": "list",
+      "items": ["항목1", "항목2"],
+      "ordered": false
+    }
+  ]
+}
+```
+
+---
+
+## 3. LLM 플러그인 아키텍처
+
+### 3.1 Provider Interface
+
+```go
+// LLMProvider는 다양한 LLM 서비스를 추상화하는 인터페이스
+type LLMProvider interface {
+    // Name returns the provider name (e.g., "openai", "anthropic", "gemini")
+    Name() string
+
+    // Format takes intermediate representation and returns formatted markdown
+    Format(ctx context.Context, ir *IntermediateRepresentation, opts FormatOptions) (*FormatResult, error)
+
+    // Validate checks if the provider is properly configured
+    Validate() error
+}
+
+type FormatOptions struct {
+    // Document type hint for better formatting
+    DocumentType string // "government", "academic", "general"
+
+    // Language preference
+    Language string // "ko", "en"
+
+    // Custom system prompt (optional)
+    SystemPrompt string
+
+    // Max tokens for response
+    MaxTokens int
+}
+
+type FormatResult struct {
+    Markdown string
+    Usage    TokenUsage
+    Warnings []string
+}
+
+type TokenUsage struct {
+    InputTokens  int
+    OutputTokens int
+}
+```
+
+### 3.2 지원 LLM Providers
+
+| Provider | 패키지 | 지원 모델 | 우선순위 |
+|----------|--------|-----------|----------|
+| **OpenAI** | `internal/llm/openai` | GPT-4o, GPT-4o-mini | P0 |
+| **Anthropic** | `internal/llm/anthropic` | Claude 3.5 Sonnet, Claude 3 Haiku | P0 |
+| **Google** | `internal/llm/gemini` | Gemini 1.5 Pro, Gemini 1.5 Flash | P1 |
+| **Ollama** | `internal/llm/ollama` | Llama 3, Mistral 등 로컬 모델 | P1 |
+| **Custom** | `internal/llm/custom` | 사용자 정의 엔드포인트 | P2 |
+
+### 3.3 Provider 등록 및 사용
+
+```go
+// Provider Registry
+type ProviderRegistry struct {
+    providers map[string]LLMProvider
+}
+
+func NewProviderRegistry() *ProviderRegistry {
+    r := &ProviderRegistry{
+        providers: make(map[string]LLMProvider),
+    }
+    // Register built-in providers
+    r.Register(openai.New())
+    r.Register(anthropic.New())
+    r.Register(gemini.New())
+    r.Register(ollama.New())
+    return r
+}
+
+func (r *ProviderRegistry) Register(p LLMProvider) {
+    r.providers[p.Name()] = p
+}
+
+func (r *ProviderRegistry) Get(name string) (LLMProvider, error) {
+    p, ok := r.providers[name]
+    if !ok {
+        return nil, fmt.Errorf("provider not found: %s", name)
+    }
+    return p, nil
+}
+```
+
+### 3.4 설정 파일
+
+```yaml
+# ~/.hwp2markdown/config.yaml
+default_provider: anthropic
+
+providers:
+  openai:
+    api_key: ${OPENAI_API_KEY}
+    model: gpt-4o-mini
+
+  anthropic:
+    api_key: ${ANTHROPIC_API_KEY}
+    model: claude-3-5-sonnet-20241022
+
+  gemini:
+    api_key: ${GOOGLE_API_KEY}
+    model: gemini-1.5-flash
+
+  ollama:
+    base_url: http://localhost:11434
+    model: llama3.2
+```
+
+---
+
+## 4. 사용자 및 사용 사례
+
+### 4.1 대상 사용자
 
 | 사용자 유형 | 설명 |
 |-------------|------|
@@ -35,36 +230,59 @@ HWP(한글 워드프로세서) 문서를 Markdown으로 변환하는 오픈소�
 | AI/ML 엔지니어 | LLM 학습/추론을 위해 HWP 문서를 Markdown으로 변환 |
 | 일반 사용자 | CLI를 통해 HWP 문서를 Markdown으로 변환하려는 사용자 |
 
-### 2.2 주요 사용 사례
+### 4.2 주요 사용 사례
 
-#### UC-1: CLI를 통한 단일 파일 변환
+#### UC-1: CLI를 통한 단일 파일 변환 (LLM 사용)
 ```bash
-hwp2markdown input.hwp -o output.md
+# 기본 변환 (LLM 포맷팅 포함)
+hwp2markdown convert document.hwpx -o output.md
+
+# 특정 LLM 프로바이더 지정
+hwp2markdown convert document.hwpx -o output.md --provider anthropic
+
+# OpenAI 사용
+hwp2markdown convert document.hwpx -o output.md --provider openai --model gpt-4o
 ```
 
-#### UC-2: CLI를 통한 배치 변환
+#### UC-2: 텍스트만 추출 (LLM 없이)
 ```bash
-hwp2markdown ./documents/*.hwp -o ./output/
+# Stage 1만 실행 - 원시 텍스트 추출
+hwp2markdown extract document.hwpx -o output.txt
+
+# IR (Intermediate Representation) JSON 출력
+hwp2markdown extract document.hwpx -o output.json --format ir
 ```
 
-#### UC-3: 라이브러리로 프로그래밍 방식 사용
-```python
-from hwp2markdown import convert
-
-markdown = convert("document.hwp")
-print(markdown)
+#### UC-3: 배치 변환
+```bash
+hwp2markdown convert ./documents/*.hwpx -o ./output/ --provider gemini
 ```
 
-#### UC-4: 이미지 추출과 함께 변환
+#### UC-4: 라이브러리로 프로그래밍 방식 사용
+```go
+import "github.com/roboco-io/hwp2markdown/pkg/hwp2markdown"
+
+// Stage 1만 사용
+ir, err := hwp2markdown.Extract("document.hwpx")
+
+// Stage 1 + Stage 2 (LLM 포맷팅)
+result, err := hwp2markdown.Convert("document.hwpx", hwp2markdown.Options{
+    Provider: "anthropic",
+    Model:    "claude-3-5-sonnet-20241022",
+})
+fmt.Println(result.Markdown)
+```
+
+#### UC-5: 이미지 추출과 함께 변환
 ```bash
-hwp2markdown input.hwp -o output.md --extract-images ./images/
+hwp2markdown convert input.hwpx -o output.md --extract-images ./images/
 ```
 
 ---
 
-## 3. 기능 요구사항
+## 5. 기능 요구사항
 
-### 3.1 지원 포맷
+### 5.1 지원 포맷
 
 | 우선순위 | 포맷 | 설명 |
 |----------|------|------|
@@ -72,122 +290,123 @@ hwp2markdown input.hwp -o output.md --extract-images ./images/
 | P1 | HWP 5.x | OLE/Compound 바이너리 포맷 |
 | P2 | HWP 3.x | 레거시 바이너리 포맷 (향후 검토) |
 
-### 3.2 변환 요소
+### 5.2 Stage 1 (Parser) 출력 요소
 
-#### P0 (필수)
+| 요소 | 설명 | 출력 형태 |
+|------|------|-----------|
+| 일반 텍스트 | 문단 내용 | 그대로 출력 |
+| 문단 구분 | 문단 경계 | 명시적 구분자 |
+| 스타일 힌트 | 굵게, 기울임, 제목 등 | 메타데이터 |
+| 표 영역 | 표 시작/끝 마커 | 탭/줄바꿈 구분 텍스트 + 힌트 |
+| 이미지 참조 | 이미지 위치 | 파일 경로 + 위치 마커 |
+| 목록 | 순서/비순서 목록 | 항목 + 유형 힌트 |
 
-| 요소 | Markdown 변환 |
-|------|---------------|
-| 일반 텍스트 | 그대로 출력 |
-| 문단 | 빈 줄로 구분 |
-| 제목/개요 | `#`, `##`, `###` 등 |
-| 굵게 | `**텍스트**` |
-| 기울임 | `*텍스트*` |
-| 취소선 | `~~텍스트~~` |
-| 순서 없는 목록 | `- 항목` |
-| 순서 있는 목록 | `1. 항목` |
-| 표 | GFM 테이블 문법 |
-| 하이퍼링크 | `[텍스트](URL)` |
+### 5.3 Stage 2 (LLM) 처리 요소
 
-#### P1 (중요)
+| 요소 | LLM 처리 | Markdown 출력 |
+|------|----------|---------------|
+| 구조 인식 | 문맥 기반 헤딩 레벨 판단 | `#`, `##`, `###` |
+| 표 재구성 | 원시 텍스트 → 구조화 | GFM 테이블 |
+| 목록 정리 | 중첩 구조 인식 | `- `, `1. ` |
+| 인용문 | 문맥 기반 판단 | `> ` |
+| 강조 | 스타일 힌트 활용 | `**`, `*`, `~~` |
 
-| 요소 | Markdown 변환 |
-|------|---------------|
-| 이미지 | `![alt](path)` + 파일 추출 |
-| 코드 블록 | ``` 문법 |
-| 인용문 | `>` |
-| 각주 | `[^1]` 문법 |
-| 수평선 | `---` |
-
-#### P2 (향후)
-
-| 요소 | Markdown 변환 |
-|------|---------------|
-| 수식 | LaTeX 문법 (`$...$`) |
-| 차트 | 이미지로 추출 또는 무시 |
-| 양식 필드 | 텍스트로 변환 또는 무시 |
-| 머리글/바닥글 | 별도 섹션 또는 무시 |
-
-### 3.3 CLI 인터페이스
+### 5.4 CLI 인터페이스
 
 ```
-hwp2markdown [OPTIONS] <INPUT>...
+hwp2markdown [command] [OPTIONS] <INPUT>...
 
-Arguments:
-  <INPUT>...  입력 HWP/HWPX 파일 또는 디렉토리
+Commands:
+  convert     HWP/HWPX 파일을 Markdown으로 변환 (LLM 포맷팅 포함)
+  extract     HWP/HWPX 파일에서 텍스트만 추출 (LLM 없이)
+  providers   사용 가능한 LLM 프로바이더 목록
+  config      설정 관리
 
-Options:
+Convert Options:
   -o, --output <PATH>       출력 파일 또는 디렉토리
-  -f, --format <FORMAT>     출력 포맷 [기본값: markdown]
-                            가능한 값: markdown, text, json
+  --provider <NAME>         LLM 프로바이더 [기본값: config에서]
+                            가능한 값: openai, anthropic, gemini, ollama
+  --model <NAME>            LLM 모델 [기본값: 프로바이더 기본값]
+  --no-llm                  LLM 포맷팅 없이 기본 변환만
   --extract-images <DIR>    이미지 추출 디렉토리
-  --image-format <FORMAT>   이미지 참조 형식 [기본값: relative]
-                            가능한 값: relative, absolute, base64
-  --table-format <FORMAT>   테이블 형식 [기본값: gfm]
-                            가능한 값: gfm, html
-  --heading-style <STYLE>   제목 스타일 [기본값: atx]
-                            가능한 값: atx, setext
+
+Extract Options:
+  -o, --output <PATH>       출력 파일 또는 디렉토리
+  -f, --format <FORMAT>     출력 포맷 [기본값: text]
+                            가능한 값: text, ir (JSON)
+  --extract-images <DIR>    이미지 추출 디렉토리
+
+Global Options:
   -v, --verbose             상세 출력
   -q, --quiet               조용한 모드
   -h, --help                도움말 출력
   -V, --version             버전 출력
 ```
 
-### 3.4 라이브러리 API
+### 5.5 라이브러리 API
 
 #### Go API
 
 ```go
 import "github.com/roboco-io/hwp2markdown/pkg/hwp2markdown"
 
-// 간단한 사용
-markdown, err := hwp2markdown.Convert("document.hwp")
+// Stage 1: 텍스트 추출만
+ir, err := hwp2markdown.Extract("document.hwpx")
 
-// 옵션과 함께 사용
-options := hwp2markdown.Options{
+// Stage 1 + Stage 2: 전체 변환
+result, err := hwp2markdown.Convert("document.hwpx", hwp2markdown.Options{
+    Provider:      "anthropic",
+    Model:         "claude-3-5-sonnet-20241022",
     ExtractImages: true,
     ImageDir:      "./images",
-    TableFormat:   hwp2markdown.TableFormatGFM,
-}
-result, err := hwp2markdown.ConvertWithOptions("document.hwp", options)
+})
 
+// 결과 사용
 fmt.Println(result.Markdown)
-fmt.Println(result.Images)   // 추출된 이미지 목록
-fmt.Println(result.Metadata) // 문서 메타데이터
+fmt.Println(result.TokenUsage)
 ```
 
 #### 결과 구조체
 
 ```go
+type ExtractResult struct {
+    IR       *IntermediateRepresentation
+    Images   []ImageInfo
+    Metadata DocumentMetadata
+    Warnings []string
+}
+
 type ConvertResult struct {
-    Markdown string           // 변환된 Markdown
-    Images   []ImageInfo      // 추출된 이미지 정보
-    Metadata DocumentMetadata // 문서 메타데이터
-    Warnings []string         // 변환 중 경고
+    Markdown   string
+    Images     []ImageInfo
+    Metadata   DocumentMetadata
+    TokenUsage TokenUsage
+    Warnings   []string
 }
 ```
 
 ---
 
-## 4. 비기능 요구사항
+## 6. 비기능 요구사항
 
-### 4.1 성능
+### 6.1 성능
 
 | 항목 | 목표 |
 |------|------|
-| 변환 속도 | 10MB 문서 기준 10초 이내 |
+| Stage 1 (추출) | 10MB 문서 기준 5초 이내 |
+| Stage 2 (LLM) | LLM API 응답 시간에 의존 |
 | 메모리 사용 | 입력 파일 크기의 10배 이내 |
 | 동시 처리 | 배치 변환 시 고루틴 병렬 처리 |
 
-### 4.2 품질
+### 6.2 품질
 
 | 항목 | 목표 |
 |------|------|
-| 텍스트 정확도 | 99% 이상 (글자 손실 없음) |
-| 구조 보존율 | 95% 이상 (제목, 목록, 표 구조) |
+| 텍스트 추출 정확도 | 99% 이상 (글자 손실 없음) |
+| LLM 포맷팅 품질 | 수동 포맷팅의 90% 수준 |
 | 테스트 커버리지 | 80% 이상 |
 
-### 4.3 호환성
+### 6.3 호환성
 
 | 항목 | 요구사항 |
 |------|----------|
@@ -196,7 +415,7 @@ type ConvertResult struct {
 | 아키텍처 | amd64, arm64 |
 | 인코딩 | UTF-8 출력 |
 
-### 4.4 배포
+### 6.4 배포
 
 | 항목 | 요구사항 |
 |------|----------|
@@ -206,55 +425,69 @@ type ConvertResult struct {
 
 ---
 
-## 5. 기술 설계
+## 7. 기술 설계
 
-### 5.1 아키텍처
+### 7.1 전체 아키텍처
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                      hwp2markdown                       │
-├─────────────────────────────────────────────────────────┤
-│  CLI Layer                                              │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │  cobra 기반 CLI                                  │   │
-│  └─────────────────────────────────────────────────┘   │
-├─────────────────────────────────────────────────────────┤
-│  Core API                                               │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │  HwpConverter                                    │   │
-│  │  - convert(path) -> ConvertResult               │   │
-│  └─────────────────────────────────────────────────┘   │
-├─────────────────────────────────────────────────────────┤
-│  Parser Layer                                           │
-│  ┌──────────────────┐  ┌──────────────────┐            │
-│  │  HwpxParser      │  │  Hwp5Parser      │            │
-│  │  (ZIP + XML)     │  │  (OLE/CFBF)      │            │
-│  └──────────────────┘  └──────────────────┘            │
-├─────────────────────────────────────────────────────────┤
-│  Document Model (AST)                                   │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │  Document, Section, Paragraph, Run, Table, ...  │   │
-│  └─────────────────────────────────────────────────┘   │
-├─────────────────────────────────────────────────────────┤
-│  Renderer Layer                                         │
-│  ┌──────────────────┐  ┌──────────────────┐            │
-│  │  MarkdownRenderer│  │  TextRenderer    │            │
-│  └──────────────────┘  └──────────────────┘            │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           hwp2markdown                                   │
+├─────────────────────────────────────────────────────────────────────────┤
+│  CLI Layer                                                              │
+│  ┌───────────────────────────────────────────────────────────────────┐ │
+│  │  cobra 기반 CLI (convert, extract, providers, config)             │ │
+│  └───────────────────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────────────────────┤
+│  Core API                                                               │
+│  ┌───────────────────────────────────────────────────────────────────┐ │
+│  │  Converter                                                         │ │
+│  │  - Extract(path) -> IntermediateRepresentation                    │ │
+│  │  - Convert(path, opts) -> Markdown                                │ │
+│  └───────────────────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────────────────────┤
+│  Stage 1: Parser Layer                                                  │
+│  ┌────────────────────────┐  ┌────────────────────────┐                │
+│  │  HwpxParser            │  │  Hwp5Parser            │                │
+│  │  (ZIP + XML)           │  │  (OLE/CFBF)            │                │
+│  └────────────────────────┘  └────────────────────────┘                │
+├─────────────────────────────────────────────────────────────────────────┤
+│  Intermediate Representation (IR)                                       │
+│  ┌───────────────────────────────────────────────────────────────────┐ │
+│  │  Document, Paragraph, TableRegion, ImageRef, ListItems, ...       │ │
+│  └───────────────────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────────────────────┤
+│  Stage 2: LLM Formatter Layer                                           │
+│  ┌───────────────────────────────────────────────────────────────────┐ │
+│  │  LLMProvider Interface                                            │ │
+│  │  ┌─────────┐ ┌───────────┐ ┌─────────┐ ┌─────────┐ ┌──────────┐  │ │
+│  │  │ OpenAI  │ │ Anthropic │ │ Gemini  │ │ Ollama  │ │ Custom   │  │ │
+│  │  └─────────┘ └───────────┘ └─────────┘ └─────────┘ └──────────┘  │ │
+│  └───────────────────────────────────────────────────────────────────┘ │
+├─────────────────────────────────────────────────────────────────────────┤
+│  Fallback: Basic Renderer (LLM 없이)                                    │
+│  ┌───────────────────────────────────────────────────────────────────┐ │
+│  │  BasicMarkdownRenderer - IR → 기본 Markdown (표 미지원)           │ │
+│  └───────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 5.2 핵심 모듈
+### 7.2 핵심 모듈
 
 | 모듈 | 역할 |
 |------|------|
 | `internal/parser/hwpx` | HWPX 파일 파싱 (ZIP + XML) |
 | `internal/parser/hwp5` | HWP 5.x 파일 파싱 (OLE/CFBF) |
-| `internal/model` | 문서 AST 정의 |
-| `internal/renderer/markdown` | AST → Markdown 변환 |
-| `internal/renderer/text` | AST → Plain Text 변환 |
+| `internal/ir` | Intermediate Representation 정의 |
+| `internal/llm` | LLM Provider 인터페이스 및 레지스트리 |
+| `internal/llm/openai` | OpenAI 프로바이더 |
+| `internal/llm/anthropic` | Anthropic 프로바이더 |
+| `internal/llm/gemini` | Google Gemini 프로바이더 |
+| `internal/llm/ollama` | Ollama 프로바이더 |
+| `internal/renderer` | 기본 Markdown 렌더러 (LLM 없이) |
 | `internal/cli` | CLI 인터페이스 |
+| `internal/config` | 설정 파일 관리 |
 
-### 5.3 의존성
+### 7.3 의존성
 
 | 패키지 | 용도 |
 |--------|------|
@@ -262,45 +495,60 @@ type ConvertResult struct {
 | `archive/zip` (표준) | HWPX ZIP 압축 해제 |
 | `encoding/xml` (표준) | HWPX XML 파싱 |
 | `github.com/spf13/cobra` | CLI 인터페이스 |
+| `github.com/sashabaranov/go-openai` | OpenAI API 클라이언트 |
+| `github.com/liushuangls/go-anthropic/v2` | Anthropic API 클라이언트 |
+| `github.com/google/generative-ai-go` | Google Gemini API 클라이언트 |
 
 ---
 
-## 6. 구현 단계
+## 8. 구현 단계
 
-### Phase 1: HWPX 기본 지원
+### Phase 1: 기본 인프라 구축
 
-**목표**: HWPX 파일의 텍스트, 문단, 기본 스타일 변환
+**목표**: 프로젝트 구조, IR 정의, LLM 플러그인 인터페이스
 
 | 작업 | 설명 |
 |------|------|
 | 프로젝트 구조 설정 | Go 모듈 구조, 테스트 환경 |
+| IR 모델 정의 | Intermediate Representation 구조체 |
+| LLM Provider 인터페이스 | 추상 인터페이스 및 레지스트리 |
+| 설정 파일 관리 | YAML 설정 로드/저장 |
+
+### Phase 2: HWPX 파서 (Stage 1)
+
+**목표**: HWPX 파일에서 IR 생성
+
+| 작업 | 설명 |
+|------|------|
 | HWPX 파서 구현 | archive/zip + encoding/xml |
-| 문서 모델 정의 | Document, Section, Paragraph, Run |
-| 기본 Markdown 렌더러 | 텍스트, 제목, 굵게, 기울임, 목록 |
-| CLI 기본 구현 | cobra 기반 단일 파일 변환 |
-
-### Phase 2: HWPX 고급 기능
-
-**목표**: 표, 이미지, 각주 등 고급 요소 지원
-
-| 작업 | 설명 |
-|------|------|
-| 표 파싱 및 변환 | GFM 테이블 문법 |
+| 텍스트 추출 | 문단, 스타일 힌트 추출 |
+| 표 영역 감지 | 표 영역 마킹 + 원시 텍스트 추출 |
 | 이미지 추출 | BinData에서 이미지 추출 |
-| 각주/미주 처리 | Markdown 각주 문법 |
-| 메타데이터 추출 | 제목, 작성자, 날짜 등 |
+| CLI extract 명령 | 텍스트/IR 출력 |
 
-### Phase 3: HWP 5.x 지원
+### Phase 3: LLM 프로바이더 (Stage 2)
 
-**목표**: HWP 5.x 바이너리 포맷 파싱 및 변환
+**목표**: LLM 기반 포맷팅 구현
 
 | 작업 | 설명 |
 |------|------|
-| OLE 파일 파싱 | mscfb 라이브러리 활용 |
-| 바이너리 레코드 파싱 | HWP 5.x 레코드 구조 해석 |
-| 기존 렌더러 재사용 | 동일 AST → Markdown 변환 |
+| OpenAI 프로바이더 | GPT-4o, GPT-4o-mini 지원 |
+| Anthropic 프로바이더 | Claude 3.5 Sonnet 지원 |
+| 포맷팅 프롬프트 | 최적화된 시스템/유저 프롬프트 |
+| CLI convert 명령 | 전체 파이프라인 |
 
-### Phase 4: 배포 및 안정화
+### Phase 4: 추가 프로바이더 및 HWP 5.x
+
+**목표**: 추가 LLM 및 HWP 5.x 지원
+
+| 작업 | 설명 |
+|------|------|
+| Gemini 프로바이더 | Google Gemini 지원 |
+| Ollama 프로바이더 | 로컬 LLM 지원 |
+| HWP 5.x 파서 | mscfb 활용 |
+| 기본 렌더러 | LLM 없이 기본 변환 |
+
+### Phase 5: 배포 및 안정화
 
 **목표**: 바이너리 릴리스, 문서화, 테스트 강화
 
@@ -313,33 +561,37 @@ type ConvertResult struct {
 
 ---
 
-## 7. 성공 지표
+## 9. 성공 지표
 
 | 지표 | 목표 |
 |------|------|
 | 지원 포맷 | HWPX, HWP 5.x |
-| 변환 정확도 | 텍스트 99%, 구조 95% |
+| 지원 LLM | OpenAI, Anthropic, Gemini, Ollama |
+| 텍스트 추출 정확도 | 99% |
+| LLM 포맷팅 품질 | 사용자 만족도 90% |
 | 바이너리 다운로드 | 출시 후 3개월 내 1,000회 |
 | GitHub Stars | 출시 후 6개월 내 100개 |
-| 이슈 대응 | 평균 7일 이내 응답 |
 
 ---
 
-## 8. 위험 및 대응
+## 10. 위험 및 대응
 
 | 위험 | 영향 | 대응 |
 |------|------|------|
 | HWP 5.x 바이너리 구조 복잡성 | 개발 지연 | HWPX 우선 지원, 기존 파서 참고 |
+| LLM API 비용 | 운영 비용 | Ollama 로컬 옵션 제공, 토큰 사용량 표시 |
+| LLM API 가용성 | 서비스 중단 | 다중 프로바이더 지원, 폴백 옵션 |
+| LLM 출력 일관성 | 품질 변동 | 프롬프트 최적화, 재시도 로직 |
 | 다양한 HWP 버전 호환성 | 변환 실패 | 점진적 버전 지원, 사용자 피드백 수집 |
-| 복잡한 레이아웃 변환 한계 | 품질 저하 | Markdown 한계 명시, 대안 포맷 제공 |
-| 한글과컴퓨터 라이선스 이슈 | 법적 문제 | 리버스 엔지니어링 법적 검토, 공개 스펙 활용 |
 
 ---
 
-## 9. 참고 자료
+## 11. 참고 자료
 
 - [HWP 포맷 조사 보고서](hwp-format-research.md)
 - [기존 솔루션 조사](existing-solutions-research.md)
 - [기술 스택](tech-stack.md)
 - [mscfb (Go OLE parser)](https://github.com/richardlehane/mscfb)
 - [cobra (Go CLI)](https://github.com/spf13/cobra)
+- [go-openai](https://github.com/sashabaranov/go-openai)
+- [go-anthropic](https://github.com/liushuangls/go-anthropic)

@@ -31,10 +31,10 @@ go.work
 .DS_Store
 Thumbs.db
 
-# Test files
-testdata/*.hwp
-testdata/*.hwpx
-!testdata/.gitkeep
-
 # Build artifacts
 *.log
+
+# Test data (keep .gitkeep and expected.md)
+testdata/*.hwp
+testdata/*.hwpx
+testdata/*.pdf
