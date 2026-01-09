@@ -12,7 +12,7 @@ HWP(한글 워드프로세서) 문서를 Markdown으로 변환하는 오픈소�
 - HWP는 한국에서 널리 사용되는 문서 포맷이나, 버전 간 호환성 문제와 폐쇄적 생태계로 인해 활용에 제약이 있음
 - LLM/AI 시대에 문서를 Markdown으로 변환하여 처리하려는 수요 증가
 - 기존 솔루션들의 한계:
-  - `unhwp` (Rust): 유망하나 Rust 의존성 필요
+  - `unhwp` (Rust): 변환 품질 문제 (불필요한 HTML 태그, 스타일 정보 손실)
   - `hwpjs`: JSON까지만 파싱, Markdown 변환 미지원
   - 상용 서비스: 외부 의존성, 비용, 프라이버시 우려
 
@@ -135,37 +135,36 @@ Options:
 
 ### 3.4 라이브러리 API
 
-#### Python API
+#### Go API
 
-```python
-from hwp2markdown import HwpConverter, ConvertOptions
+```go
+import "github.com/roboco-io/hwp2markdown/pkg/hwp2markdown"
 
-# 간단한 사용
-markdown = hwp2markdown.convert("document.hwp")
+// 간단한 사용
+markdown, err := hwp2markdown.Convert("document.hwp")
 
-# 옵션과 함께 사용
-options = ConvertOptions(
-    extract_images=True,
-    image_dir="./images",
-    table_format="gfm",
-)
-converter = HwpConverter(options)
-result = converter.convert("document.hwp")
+// 옵션과 함께 사용
+options := hwp2markdown.Options{
+    ExtractImages: true,
+    ImageDir:      "./images",
+    TableFormat:   hwp2markdown.TableFormatGFM,
+}
+result, err := hwp2markdown.ConvertWithOptions("document.hwp", options)
 
-print(result.markdown)
-print(result.images)  # 추출된 이미지 목록
-print(result.metadata)  # 문서 메타데이터
+fmt.Println(result.Markdown)
+fmt.Println(result.Images)   // 추출된 이미지 목록
+fmt.Println(result.Metadata) // 문서 메타데이터
 ```
 
-#### 결과 객체
+#### 결과 구조체
 
-```python
-@dataclass
-class ConvertResult:
-    markdown: str              # 변환된 Markdown
-    images: list[ImageInfo]    # 추출된 이미지 정보
-    metadata: DocumentMetadata # 문서 메타데이터
-    warnings: list[str]        # 변환 중 경고
+```go
+type ConvertResult struct {
+    Markdown string           // 변환된 Markdown
+    Images   []ImageInfo      // 추출된 이미지 정보
+    Metadata DocumentMetadata // 문서 메타데이터
+    Warnings []string         // 변환 중 경고
+}
 ```
 
 ---
@@ -178,7 +177,7 @@ class ConvertResult:
 |------|------|
 | 변환 속도 | 10MB 문서 기준 10초 이내 |
 | 메모리 사용 | 입력 파일 크기의 10배 이내 |
-| 동시 처리 | 배치 변환 시 멀티프로세싱 지원 |
+| 동시 처리 | 배치 변환 시 고루틴 병렬 처리 |
 
 ### 4.2 품질
 
@@ -192,16 +191,17 @@ class ConvertResult:
 
 | 항목 | 요구사항 |
 |------|----------|
-| Python | 3.10 이상 |
+| Go | 1.21 이상 |
 | OS | Linux, macOS, Windows |
+| 아키텍처 | amd64, arm64 |
 | 인코딩 | UTF-8 출력 |
 
 ### 4.4 배포
 
 | 항목 | 요구사항 |
 |------|----------|
-| 패키지 | PyPI 배포 (`pip install hwp2markdown`) |
-| 바이너리 | 주요 OS용 standalone 바이너리 제공 (향후) |
+| 바이너리 | 주요 OS용 standalone 바이너리 (GitHub Releases) |
+| Go 모듈 | `go get github.com/roboco-io/hwp2markdown` |
 | Docker | Docker 이미지 제공 (향후) |
 
 ---
@@ -216,7 +216,7 @@ class ConvertResult:
 ├─────────────────────────────────────────────────────────┤
 │  CLI Layer                                              │
 │  ┌─────────────────────────────────────────────────┐   │
-│  │  click/typer 기반 CLI                            │   │
+│  │  cobra 기반 CLI                                  │   │
 │  └─────────────────────────────────────────────────┘   │
 ├─────────────────────────────────────────────────────────┤
 │  Core API                                               │
@@ -247,21 +247,21 @@ class ConvertResult:
 
 | 모듈 | 역할 |
 |------|------|
-| `hwp2markdown.parser.hwpx` | HWPX 파일 파싱 (ZIP + XML) |
-| `hwp2markdown.parser.hwp5` | HWP 5.x 파일 파싱 (OLE/CFBF) |
-| `hwp2markdown.model` | 문서 AST 정의 |
-| `hwp2markdown.renderer.markdown` | AST → Markdown 변환 |
-| `hwp2markdown.renderer.text` | AST → Plain Text 변환 |
-| `hwp2markdown.cli` | CLI 인터페이스 |
+| `internal/parser/hwpx` | HWPX 파일 파싱 (ZIP + XML) |
+| `internal/parser/hwp5` | HWP 5.x 파일 파싱 (OLE/CFBF) |
+| `internal/model` | 문서 AST 정의 |
+| `internal/renderer/markdown` | AST → Markdown 변환 |
+| `internal/renderer/text` | AST → Plain Text 변환 |
+| `internal/cli` | CLI 인터페이스 |
 
 ### 5.3 의존성
 
 | 패키지 | 용도 |
 |--------|------|
-| `olefile` | OLE/Compound 파일 파싱 (HWP 5.x) |
-| `lxml` | XML 파싱 (HWPX) |
-| `click` 또는 `typer` | CLI 인터페이스 |
-| `Pillow` | 이미지 처리 (선택적) |
+| `github.com/richardlehane/mscfb` | OLE/Compound 파일 파싱 (HWP 5.x) |
+| `archive/zip` (표준) | HWPX ZIP 압축 해제 |
+| `encoding/xml` (표준) | HWPX XML 파싱 |
+| `github.com/spf13/cobra` | CLI 인터페이스 |
 
 ---
 
@@ -273,11 +273,11 @@ class ConvertResult:
 
 | 작업 | 설명 |
 |------|------|
-| 프로젝트 구조 설정 | Python 패키지 구조, 테스트 환경 |
-| HWPX 파서 구현 | ZIP 압축 해제, XML 파싱 |
+| 프로젝트 구조 설정 | Go 모듈 구조, 테스트 환경 |
+| HWPX 파서 구현 | archive/zip + encoding/xml |
 | 문서 모델 정의 | Document, Section, Paragraph, Run |
 | 기본 Markdown 렌더러 | 텍스트, 제목, 굵게, 기울임, 목록 |
-| CLI 기본 구현 | 단일 파일 변환 |
+| CLI 기본 구현 | cobra 기반 단일 파일 변환 |
 
 ### Phase 2: HWPX 고급 기능
 
@@ -296,17 +296,17 @@ class ConvertResult:
 
 | 작업 | 설명 |
 |------|------|
-| OLE 파일 파싱 | olefile 라이브러리 활용 |
+| OLE 파일 파싱 | mscfb 라이브러리 활용 |
 | 바이너리 레코드 파싱 | HWP 5.x 레코드 구조 해석 |
 | 기존 렌더러 재사용 | 동일 AST → Markdown 변환 |
 
 ### Phase 4: 배포 및 안정화
 
-**목표**: PyPI 배포, 문서화, 테스트 강화
+**목표**: 바이너리 릴리스, 문서화, 테스트 강화
 
 | 작업 | 설명 |
 |------|------|
-| PyPI 배포 | 패키지 빌드 및 배포 |
+| 바이너리 릴리스 | GoReleaser로 크로스 플랫폼 빌드 |
 | 문서화 | README, API 문서, 예제 |
 | 테스트 강화 | 다양한 HWP 샘플로 테스트 |
 | CI/CD 설정 | GitHub Actions |
@@ -319,7 +319,7 @@ class ConvertResult:
 |------|------|
 | 지원 포맷 | HWPX, HWP 5.x |
 | 변환 정확도 | 텍스트 99%, 구조 95% |
-| PyPI 다운로드 | 출시 후 3개월 내 1,000회 |
+| 바이너리 다운로드 | 출시 후 3개월 내 1,000회 |
 | GitHub Stars | 출시 후 6개월 내 100개 |
 | 이슈 대응 | 평균 7일 이내 응답 |
 
@@ -340,6 +340,6 @@ class ConvertResult:
 
 - [HWP 포맷 조사 보고서](hwp-format-research.md)
 - [기존 솔루션 조사](existing-solutions-research.md)
-- [unhwp (Rust)](https://lib.rs/crates/unhwp)
-- [hwpjs (JavaScript)](https://github.com/ohah/hwpjs)
-- [olefile (Python OLE parser)](https://olefile.readthedocs.io/)
+- [기술 스택](tech-stack.md)
+- [mscfb (Go OLE parser)](https://github.com/richardlehane/mscfb)
+- [cobra (Go CLI)](https://github.com/spf13/cobra)

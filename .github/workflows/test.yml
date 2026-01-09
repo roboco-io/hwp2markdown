@@ -12,33 +12,36 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.10", "3.11", "3.12"]
+        go-version: ["1.21", "1.22"]
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          go-version: ${{ matrix.go-version }}
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+        run: go mod download
 
-      - name: Lint with ruff
-        run: ruff check src tests
+      - name: Build
+        run: go build -v ./...
 
-      - name: Type check with mypy
-        run: mypy src
+      - name: Test
+        run: go test -v -race -coverprofile=coverage.out ./...
 
-      - name: Test with pytest
-        run: pytest --cov-report=xml
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
-        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          files: ./coverage.xml
-          fail_ci_if_error: false
+          go-version: "1.22"
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest

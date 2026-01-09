@@ -10,33 +10,34 @@ hwp2markdown은 크로스 플랫폼 CLI 도구로, Windows, macOS, Linux에서 �
 
 ### 후보 비교
 
-| 언어 | 크로스 플랫폼 | 바이너리 배포 | 생태계 | 개발 속도 |
-|------|--------------|---------------|--------|-----------|
-| **Rust** | O | 네이티브 바이너리 | OLE 라이브러리 부족 | 느림 |
-| **Go** | O | 네이티브 바이너리 | OLE 라이브러리 부족 | 보통 |
-| **Python** | O | PyInstaller/Nuitka | olefile, lxml 등 풍부 | 빠름 |
-| **TypeScript** | O | pkg/nexe | 브라우저 중심 생태계 | 빠름 |
+| 언어 | 크로스 플랫폼 | 바이너리 배포 | 바이너리 크기 | 개발 속도 | 동시성 |
+|------|--------------|---------------|---------------|-----------|--------|
+| **Go** | O | 네이티브 바이너리 | 5-15MB | 빠름 | 고루틴 내장 |
+| **Rust** | O | 네이티브 바이너리 | 2-10MB | 느림 | 비동기 지원 |
+| **Python** | O | PyInstaller (30-50MB) | 큼 | 빠름 | GIL 제약 |
+| **TypeScript** | O | pkg/nexe (50MB+) | 매우 큼 | 빠름 | 이벤트 루프 |
 
-### 결정: Python
+### 결정: Go
 
 **이유:**
-1. **OLE 파싱 라이브러리**: `olefile`이 성숙하고 HWP 5.x 파싱에 적합
-2. **XML 파싱**: `lxml`이 고성능 XML 파싱 제공
-3. **개발 생산성**: 빠른 프로토타이핑과 이터레이션
-4. **바이너리 배포**: PyInstaller 또는 Nuitka로 standalone 바이너리 생성 가능
-5. **커뮤니티**: Python 사용자층이 넓어 기여 및 유지보수 용이
+1. **단일 바이너리 배포**: 의존성 없이 단일 실행 파일로 배포 가능
+2. **크로스 컴파일**: `GOOS`/`GOARCH` 설정만으로 모든 플랫폼 빌드
+3. **빠른 빌드 속도**: 대규모 프로젝트도 수 초 내 빌드
+4. **간결한 문법**: 학습 곡선이 낮고 코드 가독성 높음
+5. **표준 라이브러리**: `archive/zip`, `encoding/xml` 등 풍부한 내장 기능
+6. **동시성**: 고루틴으로 배치 처리 시 성능 최적화 용이
 
 ---
 
-## 3. Python 버전
+## 3. Go 버전
 
-### 결정: Python 3.10+
+### 결정: Go 1.21+
 
 **이유:**
-- `match` 문법 (구조적 패턴 매칭) 활용
-- `dataclasses` 개선사항
-- 타입 힌트 기능 강화 (`ParamSpec`, `TypeAlias`)
-- 2026년까지 보안 지원
+- `slices`, `maps` 패키지 표준 라이브러리 포함
+- 제네릭 기능 안정화
+- `slog` 구조화된 로깅
+- 향상된 PGO (Profile Guided Optimization)
 
 ---
 
@@ -44,153 +45,164 @@ hwp2markdown은 크로스 플랫폼 CLI 도구로, Windows, macOS, Linux에서 �
 
 ### 4.1 파일 파싱
 
-| 패키지 | 버전 | 용도 | 라이선스 |
-|--------|------|------|----------|
-| `olefile` | >=0.46 | HWP 5.x OLE/Compound 파일 파싱 | BSD-2-Clause |
-| `lxml` | >=4.9 | HWPX XML 파싱 | BSD-3-Clause |
+| 패키지 | 용도 | 라이선스 |
+|--------|------|----------|
+| `archive/zip` (표준) | HWPX ZIP 압축 해제 | BSD |
+| `encoding/xml` (표준) | HWPX XML 파싱 | BSD |
+| `github.com/richardlehane/mscfb` | HWP 5.x OLE/CFBF 파싱 | Apache-2.0 |
 
-#### olefile
+#### HWPX 파싱 (표준 라이브러리)
 
-```python
-import olefile
+```go
+import (
+    "archive/zip"
+    "encoding/xml"
+)
 
-ole = olefile.OleFileIO("document.hwp")
-streams = ole.listdir()
-# ['FileHeader', 'DocInfo', 'BodyText/Section0', ...]
-data = ole.openstream("BodyText/Section0").read()
+func parseHWPX(path string) (*Document, error) {
+    r, err := zip.OpenReader(path)
+    if err != nil {
+        return nil, err
+    }
+    defer r.Close()
+
+    for _, f := range r.File {
+        if f.Name == "Contents/content.hpf" {
+            rc, _ := f.Open()
+            defer rc.Close()
+            // XML 파싱
+        }
+    }
+    return &Document{}, nil
+}
 ```
 
-#### lxml
+#### HWP 5.x OLE 파싱
 
-```python
-from lxml import etree
+```go
+import "github.com/richardlehane/mscfb"
 
-tree = etree.parse("Contents/section0.xml")
-root = tree.getroot()
-paragraphs = root.findall(".//hp:p", namespaces={"hp": "..."})
+func parseHWP5(path string) (*Document, error) {
+    file, err := os.Open(path)
+    if err != nil {
+        return nil, err
+    }
+    defer file.Close()
+
+    doc, err := mscfb.New(file)
+    if err != nil {
+        return nil, err
+    }
+
+    for entry, err := doc.Next(); err == nil; entry, err = doc.Next() {
+        // FileHeader, DocInfo, BodyText/Section0 등 처리
+        fmt.Println(entry.Name)
+    }
+    return &Document{}, nil
+}
 ```
 
 ### 4.2 CLI 프레임워크
 
 | 패키지 | 용도 | 선택 이유 |
 |--------|------|-----------|
-| `typer` | CLI 인터페이스 | 타입 힌트 기반, 자동 완성, 도움말 생성 |
-| `rich` | 터미널 출력 | 컬러, 프로그레스 바, 테이블 (typer 의존성) |
+| `github.com/spf13/cobra` | CLI 인터페이스 | 업계 표준, 서브커맨드 지원 |
+| `github.com/spf13/pflag` | POSIX 플래그 | cobra 의존성 |
 
-#### typer 예시
+#### cobra 예시
 
-```python
-import typer
-from pathlib import Path
+```go
+package cmd
 
-app = typer.Typer()
+import (
+    "github.com/spf13/cobra"
+)
 
-@app.command()
-def convert(
-    input_file: Path = typer.Argument(..., help="입력 HWP/HWPX 파일"),
-    output: Path = typer.Option(None, "-o", "--output", help="출력 파일"),
-    extract_images: Path = typer.Option(None, "--extract-images", help="이미지 추출 디렉토리"),
-):
-    """HWP/HWPX 파일을 Markdown으로 변환합니다."""
-    ...
+var rootCmd = &cobra.Command{
+    Use:   "hwp2markdown",
+    Short: "HWP/HWPX 문서를 Markdown으로 변환",
+    Long:  `HWP(한글 워드프로세서) 문서를 Markdown으로 변환하는 CLI 도구입니다.`,
+}
 
-if __name__ == "__main__":
-    app()
+var convertCmd = &cobra.Command{
+    Use:   "convert [input]",
+    Short: "HWP/HWPX 파일을 Markdown으로 변환",
+    Args:  cobra.ExactArgs(1),
+    RunE: func(cmd *cobra.Command, args []string) error {
+        input := args[0]
+        output, _ := cmd.Flags().GetString("output")
+        return convert(input, output)
+    },
+}
+
+func init() {
+    convertCmd.Flags().StringP("output", "o", "", "출력 파일")
+    convertCmd.Flags().String("extract-images", "", "이미지 추출 디렉토리")
+    rootCmd.AddCommand(convertCmd)
+}
 ```
 
-### 4.3 이미지 처리 (선택적)
+### 4.3 기타 유틸리티
 
-| 패키지 | 버전 | 용도 | 라이선스 |
-|--------|------|------|----------|
-| `Pillow` | >=9.0 | 이미지 포맷 변환, 메타데이터 | HPND |
+| 패키지 | 용도 | 라이선스 |
+|--------|------|----------|
+| `golang.org/x/text/encoding/korean` | EUC-KR 인코딩 처리 | BSD |
+| `github.com/fatih/color` | 컬러 터미널 출력 (선택적) | MIT |
 
-### 4.4 전체 의존성
+### 4.4 전체 의존성 (go.mod)
 
-```toml
-# pyproject.toml
-[project]
-dependencies = [
-    "olefile>=0.46",
-    "lxml>=4.9",
-    "typer>=0.9",
-    "rich>=13.0",
-]
+```go
+module github.com/roboco-io/hwp2markdown
 
-[project.optional-dependencies]
-images = ["Pillow>=9.0"]
-dev = [
-    "pytest>=7.0",
-    "pytest-cov>=4.0",
-    "ruff>=0.1",
-    "mypy>=1.0",
-]
+go 1.21
+
+require (
+    github.com/richardlehane/mscfb v1.0.4
+    github.com/spf13/cobra v1.8.0
+    golang.org/x/text v0.14.0
+)
 ```
 
 ---
 
 ## 5. 바이너리 배포
 
-### 5.1 도구 비교
+### 5.1 크로스 컴파일
 
-| 도구 | 바이너리 크기 | 시작 시간 | 난이도 |
-|------|--------------|-----------|--------|
-| **PyInstaller** | 30-50MB | 빠름 | 낮음 |
-| **Nuitka** | 10-30MB | 매우 빠름 | 중간 |
-| **cx_Freeze** | 30-50MB | 빠름 | 낮음 |
+Go는 단일 명령으로 모든 플랫폼용 바이너리 생성 가능:
 
-### 5.2 결정: PyInstaller (1차) → Nuitka (향후)
+```bash
+# Windows
+GOOS=windows GOARCH=amd64 go build -o hwp2markdown-windows-x64.exe
 
-**1차 배포: PyInstaller**
-- 설정 간단, 빠른 빌드
-- 크로스 플랫폼 지원 우수
+# macOS Intel
+GOOS=darwin GOARCH=amd64 go build -o hwp2markdown-macos-x64
 
-**향후: Nuitka**
-- 더 작은 바이너리
-- 더 빠른 실행 속도
-- Python 코드를 C로 컴파일
+# macOS Apple Silicon
+GOOS=darwin GOARCH=arm64 go build -o hwp2markdown-macos-arm64
 
-### 5.3 빌드 설정
-
-```python
-# hwp2markdown.spec (PyInstaller)
-a = Analysis(
-    ['src/hwp2markdown/__main__.py'],
-    pathex=[],
-    binaries=[],
-    datas=[],
-    hiddenimports=['lxml._elementpath'],
-    hookspath=[],
-    hooksconfig={},
-    runtime_hooks=[],
-    excludes=[],
-    noarchive=False,
-)
-
-pyz = PYZ(a.pure)
-
-exe = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.datas,
-    [],
-    name='hwp2markdown',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    console=True,
-)
+# Linux
+GOOS=linux GOARCH=amd64 go build -o hwp2markdown-linux-x64
 ```
 
-### 5.4 배포 대상
+### 5.2 빌드 최적화
 
-| 플랫폼 | 아키텍처 | 파일명 |
-|--------|----------|--------|
-| Windows | x64 | `hwp2markdown-windows-x64.exe` |
-| macOS | x64 | `hwp2markdown-macos-x64` |
-| macOS | arm64 | `hwp2markdown-macos-arm64` |
-| Linux | x64 | `hwp2markdown-linux-x64` |
+```bash
+# 릴리스 빌드 (심볼 제거, 크기 최적화)
+go build -ldflags="-s -w" -o hwp2markdown
+
+# 버전 정보 삽입
+go build -ldflags="-s -w -X main.version=1.0.0" -o hwp2markdown
+```
+
+### 5.3 배포 대상
+
+| 플랫폼 | 아키텍처 | 파일명 | 예상 크기 |
+|--------|----------|--------|-----------|
+| Windows | x64 | `hwp2markdown-windows-x64.exe` | ~8MB |
+| macOS | x64 | `hwp2markdown-macos-x64` | ~8MB |
+| macOS | arm64 | `hwp2markdown-macos-arm64` | ~8MB |
+| Linux | x64 | `hwp2markdown-linux-x64` | ~8MB |
 
 ---
 
@@ -198,123 +210,98 @@ exe = EXE(
 
 ```
 hwp2markdown/
-├── src/
+├── cmd/
 │   └── hwp2markdown/
-│       ├── __init__.py
-│       ├── __main__.py          # CLI 진입점
-│       ├── cli.py               # typer CLI 정의
-│       ├── converter.py         # 메인 변환 로직
-│       ├── parser/
-│       │   ├── __init__.py
-│       │   ├── base.py          # 파서 추상 클래스
-│       │   ├── hwpx.py          # HWPX 파서
-│       │   └── hwp5.py          # HWP 5.x 파서
-│       ├── model/
-│       │   ├── __init__.py
-│       │   └── document.py      # 문서 AST 모델
-│       └── renderer/
-│           ├── __init__.py
-│           ├── base.py          # 렌더러 추상 클래스
-│           ├── markdown.py      # Markdown 렌더러
-│           └── text.py          # Plain Text 렌더러
-├── tests/
-│   ├── __init__.py
-│   ├── conftest.py
-│   ├── fixtures/                # 테스트용 HWP/HWPX 파일
-│   ├── test_parser_hwpx.py
-│   ├── test_parser_hwp5.py
-│   ├── test_renderer_markdown.py
-│   └── test_cli.py
+│       └── main.go              # 진입점
+├── internal/
+│   ├── cli/
+│   │   ├── root.go              # cobra 루트 커맨드
+│   │   └── convert.go           # convert 서브커맨드
+│   ├── parser/
+│   │   ├── parser.go            # 파서 인터페이스
+│   │   ├── hwpx.go              # HWPX 파서
+│   │   ├── hwp5.go              # HWP 5.x 파서
+│   │   └── detector.go          # 포맷 감지
+│   ├── model/
+│   │   ├── document.go          # 문서 AST
+│   │   ├── paragraph.go         # 문단
+│   │   ├── table.go             # 표
+│   │   └── image.go             # 이미지
+│   └── renderer/
+│       ├── renderer.go          # 렌더러 인터페이스
+│       ├── markdown.go          # Markdown 렌더러
+│       └── text.go              # Plain Text 렌더러
+├── pkg/
+│   └── hwp2markdown/
+│       └── convert.go           # 공개 API
+├── testdata/
+│   ├── sample.hwpx
+│   └── sample.hwp
 ├── docs/
 │   ├── hwp-format-research.md
 │   ├── existing-solutions-research.md
 │   ├── PRD.md
 │   └── tech-stack.md
-├── pyproject.toml
+├── go.mod
+├── go.sum
+├── Makefile
 ├── README.md
 ├── LICENSE
 └── .github/
     └── workflows/
-        ├── test.yml             # 테스트 CI
-        └── release.yml          # 바이너리 빌드 및 릴리스
+        ├── test.yml
+        └── release.yml
 ```
 
 ---
 
-## 7. 빌드 및 패키징
+## 7. 빌드 및 개발
 
-### 7.1 pyproject.toml
+### 7.1 Makefile
 
-```toml
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+```makefile
+.PHONY: build test lint clean release
 
-[project]
-name = "hwp2markdown"
-version = "0.1.0"
-description = "HWP(한글 워드프로세서) 문서를 Markdown으로 변환하는 도구"
-readme = "README.md"
-license = "MIT"
-requires-python = ">=3.10"
-authors = [
-    { name = "roboco-io" }
-]
-keywords = ["hwp", "hwpx", "markdown", "converter", "hangul"]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Environment :: Console",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Topic :: Text Processing :: Markup",
-]
-dependencies = [
-    "olefile>=0.46",
-    "lxml>=4.9",
-    "typer>=0.9",
-    "rich>=13.0",
-]
+VERSION ?= $(shell git describe --tags --always --dirty)
+LDFLAGS := -ldflags="-s -w -X main.version=$(VERSION)"
 
-[project.optional-dependencies]
-images = ["Pillow>=9.0"]
-dev = [
-    "pytest>=7.0",
-    "pytest-cov>=4.0",
-    "ruff>=0.1",
-    "mypy>=1.0",
-    "pyinstaller>=6.0",
-]
+build:
+	go build $(LDFLAGS) -o bin/hwp2markdown ./cmd/hwp2markdown
 
-[project.scripts]
-hwp2markdown = "hwp2markdown.cli:app"
+test:
+	go test -v -race -cover ./...
 
-[project.urls]
-Homepage = "https://github.com/roboco-io/hwp2markdown"
-Repository = "https://github.com/roboco-io/hwp2markdown"
-Issues = "https://github.com/roboco-io/hwp2markdown/issues"
+lint:
+	golangci-lint run
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/hwp2markdown"]
+clean:
+	rm -rf bin/ dist/
 
-[tool.ruff]
-line-length = 100
-target-version = "py310"
+release:
+	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o dist/hwp2markdown-windows-x64.exe ./cmd/hwp2markdown
+	GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o dist/hwp2markdown-macos-x64 ./cmd/hwp2markdown
+	GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o dist/hwp2markdown-macos-arm64 ./cmd/hwp2markdown
+	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o dist/hwp2markdown-linux-x64 ./cmd/hwp2markdown
+```
 
-[tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP"]
+### 7.2 개발 환경 설정
 
-[tool.mypy]
-python_version = "3.10"
-strict = true
+```bash
+# 저장소 클론
+git clone https://github.com/roboco-io/hwp2markdown.git
+cd hwp2markdown
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-addopts = "-v --cov=hwp2markdown --cov-report=term-missing"
+# 의존성 다운로드
+go mod download
+
+# 빌드
+make build
+
+# 테스트
+make test
+
+# 린트 (golangci-lint 필요)
+make lint
 ```
 
 ---
@@ -339,29 +326,31 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.10", "3.11", "3.12"]
+        go-version: ["1.21", "1.22"]
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          go-version: ${{ matrix.go-version }}
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+        run: go mod download
 
-      - name: Lint with ruff
-        run: ruff check src tests
+      - name: Lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
 
-      - name: Type check with mypy
-        run: mypy src
+      - name: Test
+        run: go test -v -race -coverprofile=coverage.out ./...
 
-      - name: Test with pytest
-        run: pytest
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: coverage.out
 ```
 
 ### 8.2 릴리스 워크플로
@@ -371,105 +360,131 @@ jobs:
 name: Release
 
 on:
-  release:
-    types: [created]
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            asset_name: hwp2markdown-linux-x64
-          - os: macos-latest
-            asset_name: hwp2markdown-macos-x64
-          - os: macos-14
-            asset_name: hwp2markdown-macos-arm64
-          - os: windows-latest
-            asset_name: hwp2markdown-windows-x64.exe
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-
-      - name: Build with PyInstaller
-        run: pyinstaller --onefile --name ${{ matrix.asset_name }} src/hwp2markdown/__main__.py
-
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./dist/${{ matrix.asset_name }}
-          asset_name: ${{ matrix.asset_name }}
-          asset_content_type: application/octet-stream
-
-  publish-pypi:
+  release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          fetch-depth: 0
 
-      - name: Install build tools
-        run: pip install build twine
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
 
-      - name: Build package
-        run: python -m build
-
-      - name: Publish to PyPI
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          version: latest
+          args: release --clean
         env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
-        run: twine upload dist/*
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+### 8.3 GoReleaser 설정
+
+```yaml
+# .goreleaser.yml
+project_name: hwp2markdown
+
+builds:
+  - id: hwp2markdown
+    main: ./cmd/hwp2markdown
+    binary: hwp2markdown
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+
+archives:
+  - id: default
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  github:
+    owner: roboco-io
+    name: hwp2markdown
 ```
 
 ---
 
-## 9. 개발 환경 설정
+## 9. 코드 품질
 
-### 9.1 초기 설정
+### 9.1 golangci-lint 설정
 
-```bash
-# 저장소 클론
-git clone https://github.com/roboco-io/hwp2markdown.git
-cd hwp2markdown
+```yaml
+# .golangci.yml
+run:
+  timeout: 5m
 
-# 가상환경 생성
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gofmt
+    - goimports
+    - misspell
+    - revive
 
-# 개발 의존성 설치
-pip install -e ".[dev,images]"
-
-# 린트 및 테스트
-ruff check src tests
-mypy src
-pytest
+linters-settings:
+  revive:
+    rules:
+      - name: exported
+        disabled: false
 ```
 
-### 9.2 로컬 바이너리 빌드
+### 9.2 pre-commit 설정
 
-```bash
-# PyInstaller로 빌드
-pyinstaller --onefile --name hwp2markdown src/hwp2markdown/__main__.py
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v1.55.2
+    hooks:
+      - id: golangci-lint
 
-# 실행
-./dist/hwp2markdown --help
+  - repo: local
+    hooks:
+      - id: go-test
+        name: go test
+        entry: go test ./...
+        language: system
+        pass_filenames: false
 ```
 
 ---
@@ -478,14 +493,22 @@ pyinstaller --onefile --name hwp2markdown src/hwp2markdown/__main__.py
 
 | 항목 | 선택 |
 |------|------|
-| 언어 | Python 3.10+ |
-| CLI 프레임워크 | typer + rich |
-| OLE 파싱 | olefile |
-| XML 파싱 | lxml |
-| 이미지 처리 | Pillow (선택적) |
-| 패키징 | hatchling |
-| 바이너리 빌드 | PyInstaller |
-| 린터 | ruff |
-| 타입 체커 | mypy |
-| 테스트 | pytest |
+| 언어 | Go 1.21+ |
+| CLI 프레임워크 | cobra |
+| HWPX 파싱 | archive/zip + encoding/xml (표준) |
+| HWP 5.x 파싱 | mscfb |
+| 한글 인코딩 | golang.org/x/text/encoding/korean |
+| 린터 | golangci-lint |
+| 테스트 | go test (표준) |
+| 릴리스 | GoReleaser |
 | CI/CD | GitHub Actions |
+
+### Python 대비 Go의 장점
+
+| 항목 | Python | Go |
+|------|--------|-----|
+| 바이너리 크기 | 30-50MB (PyInstaller) | 5-15MB |
+| 의존성 | 런타임 필요 또는 번들링 | 없음 (단일 바이너리) |
+| 시작 시간 | 느림 | 즉시 |
+| 크로스 컴파일 | 복잡 | `GOOS`/`GOARCH`로 간단 |
+| 동시성 | GIL 제약 | 고루틴 |

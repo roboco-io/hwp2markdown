@@ -1,65 +1,24 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# C extensions
-*.so
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
+# Binaries
+bin/
 dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
 
-# PyInstaller
-*.manifest
-*.spec
+# Test binary
+*.test
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
+# Output of go coverage tool
+*.out
+coverage.out
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
+# Dependency directories
+vendor/
 
-# Translations
-*.mo
-*.pot
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
+# Go workspace file
+go.work
 
 # IDEs
 .idea/
@@ -68,14 +27,14 @@ venv.bak/
 *.swo
 *~
 
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# ruff
-.ruff_cache/
-
 # OS
 .DS_Store
 Thumbs.db
+
+# Test files
+testdata/*.hwp
+testdata/*.hwpx
+!testdata/.gitkeep
+
+# Build artifacts
+*.log
