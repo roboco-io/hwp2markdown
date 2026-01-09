@@ -1,0 +1,58 @@
+#!/bin/bash
+# pre-push hook: lint와 테스트를 실행하고 모두 통과해야 push 허용
+
+set -e
+
+echo "🔍 Running pre-push checks..."
+echo ""
+
+# 색상 정의
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# 실패 시 메시지 출력 함수
+fail() {
+    echo ""
+    echo -e "${RED}❌ Pre-push check failed: $1${NC}"
+    echo -e "${YELLOW}Push aborted. Please fix the issues and try again.${NC}"
+    exit 1
+}
+
+# 성공 메시지 출력 함수
+success() {
+    echo -e "${GREEN}✓ $1${NC}"
+}
+
+# 1. Ruff 린트 체크
+echo "📝 Running ruff lint..."
+if ruff check src tests; then
+    success "Ruff lint passed"
+else
+    fail "Ruff lint check"
+fi
+
+echo ""
+
+# 2. Mypy 타입 체크
+echo "🔬 Running mypy type check..."
+if mypy src; then
+    success "Mypy type check passed"
+else
+    fail "Mypy type check"
+fi
+
+echo ""
+
+# 3. Pytest 테스트
+echo "🧪 Running pytest..."
+if pytest --tb=short -q; then
+    success "All tests passed"
+else
+    fail "Pytest"
+fi
+
+echo ""
+echo -e "${GREEN}✅ All pre-push checks passed!${NC}"
+echo ""
