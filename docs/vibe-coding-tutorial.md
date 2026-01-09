@@ -164,21 +164,7 @@ git push시에 테스트 및 lint가 동작하도록 하고 이를 모두 통과
 
 ## 4. 디버깅 및 문제 해결
 
-### 4.1 에러 보고
-
-**프롬프트:**
-```
-hwp2markdown 실행시 에러 발생.
- hwp2markdown
-Traceback (most recent call last):
-  File "/opt/homebrew/anaconda3/bin/hwp2markdown", line 5, in <module>
-    from hwp2markdown.cli import app
-ModuleNotFoundError: No module named 'hwp2markdown'
-```
-
-**패턴:** 에러 메시지 전체 복사하여 전달
-
-### 4.2 옵션 오류
+### 4.1 옵션 오류
 
 **프롬프트:**
 ```
@@ -189,7 +175,7 @@ Error: unknown shorthand flag: 'l' in -llm
 
 **결과:** `--llm` (더블 대시) 사용법 안내
 
-### 4.3 테이블 포맷 문제
+### 4.2 테이블 포맷 문제
 
 **프롬프트:**
 ```
@@ -201,7 +187,7 @@ Error: unknown shorthand flag: 'l' in -llm
 - 파일 참조로 문제 상황 전달
 - 디버깅 방법 제시
 
-### 4.4 특정 위치 지정
+### 4.3 특정 위치 지정
 
 **프롬프트:**
 ```
@@ -214,7 +200,7 @@ Error: unknown shorthand flag: 'l' in -llm
 
 **패턴:** 라인 번호나 특정 섹션 명시
 
-### 4.5 포맷 한계 인식
+### 4.4 포맷 한계 인식
 
 **프롬프트:**
 ```
