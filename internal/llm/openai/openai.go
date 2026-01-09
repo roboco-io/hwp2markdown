@@ -53,7 +53,7 @@ func New(cfg Config) (*Provider, error) {
 
 	timeout := cfg.Timeout
 	if timeout == 0 {
-		timeout = 60 * time.Second
+		timeout = 180 * time.Second // 3 minutes for large documents
 	}
 
 	config := goopenai.DefaultConfig(apiKey)

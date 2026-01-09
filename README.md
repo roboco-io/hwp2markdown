@@ -239,6 +239,7 @@ hwp2markdown/
 | LLM | 결과 | 모델 |
 |-----|------|------|
 | Claude | [결과 보기](testdata/한글%20테스트_stage2_claude.md) | claude-sonnet-4-20250514 |
+| GPT | [결과 보기](testdata/한글%20테스트_stage2_gpt.md) | gpt-4o-mini |
 | Gemini | [결과 보기](testdata/한글%20테스트_stage2_gemini.md) | gemini-2.0-flash |
 | Solar | [결과 보기](testdata/한글%20테스트_stage2_solar.md) | solar-pro |
 
