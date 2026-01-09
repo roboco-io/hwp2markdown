@@ -194,3 +194,98 @@ func TestGetEnvBool(t *testing.T) {
 	}
 	os.Unsetenv("TEST_BOOL")
 }
+
+func TestNewLoader(t *testing.T) {
+	loader, err := NewLoader()
+	if err != nil {
+		t.Fatalf("failed to create loader: %v", err)
+	}
+
+	path := loader.ConfigPath()
+	if path == "" {
+		t.Error("expected non-empty config path")
+	}
+
+	// Should contain config.yaml
+	if filepath.Base(path) != ConfigFileName {
+		t.Errorf("expected config file name %s, got %s", ConfigFileName, filepath.Base(path))
+	}
+}
+
+func TestLoader_Init(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	loader := NewLoaderWithPath(configPath)
+
+	// Init should create file
+	err := loader.Init()
+	if err != nil {
+		t.Fatalf("failed to init config: %v", err)
+	}
+
+	if !loader.Exists() {
+		t.Error("expected config file to exist after init")
+	}
+
+	// Init again should fail
+	err = loader.Init()
+	if err == nil {
+		t.Error("expected error when initializing existing config")
+	}
+}
+
+func TestLoader_LoadInvalidYAML(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	// Write invalid YAML
+	invalidYAML := "{{{{invalid yaml"
+	if err := os.WriteFile(configPath, []byte(invalidYAML), 0644); err != nil {
+		t.Fatalf("failed to write test config: %v", err)
+	}
+
+	loader := NewLoaderWithPath(configPath)
+	_, err := loader.Load()
+	if err == nil {
+		t.Error("expected error for invalid YAML")
+	}
+}
+
+func TestExpandEnvVars_UnsetVar(t *testing.T) {
+	// Make sure the env var is unset
+	os.Unsetenv("UNSET_VAR_FOR_TEST")
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	content := `default_provider: test
+providers:
+  test:
+    api_key: ${UNSET_VAR_FOR_TEST}
+    model: test-model
+    max_tokens: 1000
+format:
+  temperature: 0.5
+  language: en
+`
+	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test config: %v", err)
+	}
+
+	loader := NewLoaderWithPath(configPath)
+	cfg, err := loader.Load()
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	testProvider, ok := cfg.GetProvider("test")
+	if !ok {
+		t.Fatal("expected to find 'test' provider")
+	}
+
+	// Unset env var should result in empty string
+	if testProvider.APIKey != "" {
+		t.Errorf("expected empty API key for unset env var, got %s", testProvider.APIKey)
+	}
+}

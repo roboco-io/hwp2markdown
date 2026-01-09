@@ -127,3 +127,66 @@ func TestExtractCommandFlags(t *testing.T) {
 		}
 	}
 }
+
+func TestConfigCommand(t *testing.T) {
+	if configCmd.Use != "config" {
+		t.Errorf("expected Use 'config', got '%s'", configCmd.Use)
+	}
+
+	// Check subcommands exist
+	subcommands := []string{"show", "init", "set", "path"}
+	for _, name := range subcommands {
+		found := false
+		for _, cmd := range configCmd.Commands() {
+			if cmd.Use == name || cmd.Name() == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected subcommand '%s' to exist", name)
+		}
+	}
+}
+
+func TestMaskAPIKey(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"", ""},
+		{"short", "****"},
+		{"12345678", "****"},
+		{"sk-abcd1234efgh5678", "sk-a****5678"},
+		{"AIzaSyD1234567890abcdefghijklmnop", "AIza****mnop"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			result := maskAPIKey(tc.input)
+			if result != tc.expected {
+				t.Errorf("maskAPIKey(%q) = %q, want %q", tc.input, result, tc.expected)
+			}
+		})
+	}
+}
+
+func TestContains(t *testing.T) {
+	slice := []string{"a", "b", "c"}
+
+	if !contains(slice, "a") {
+		t.Error("expected contains(slice, 'a') to be true")
+	}
+
+	if !contains(slice, "c") {
+		t.Error("expected contains(slice, 'c') to be true")
+	}
+
+	if contains(slice, "d") {
+		t.Error("expected contains(slice, 'd') to be false")
+	}
+
+	if contains([]string{}, "a") {
+		t.Error("expected contains(empty, 'a') to be false")
+	}
+}
