@@ -228,6 +228,8 @@ hwp2markdown/
 
 Stage 1은 문서 구조를 그대로 추출하며, Stage 2는 LLM을 통해 더 읽기 쉬운 형태로 정리합니다.
 
+> 테스트 파일 출처: [한국문화원 문서 뷰어 테스트 예시](https://www.korean-culture.org/operT2st/view.do?seq=1047514)
+
 ## 문서
 
 - [PRD](docs/PRD.md) - 제품 요구사항
