@@ -187,13 +187,28 @@ func (p *Parser) parseSection(doc *ir.Document, sectionPath string) error {
 	return p.parseSectionXML(doc, decoder)
 }
 
+// tableState holds the state for a table being parsed.
+type tableState struct {
+	rows       [][]cellContext
+	currentRow []cellContext
+	cell       *cellContext
+}
+
 // parseSectionXML parses the section XML content.
 func (p *Parser) parseSectionXML(doc *ir.Document, decoder *xml.Decoder) error {
 	var currentParagraph *ir.Paragraph
-	var currentCell *cellContext
-	var inTable bool
-	var tableRows [][]cellContext
-	var currentRow []cellContext
+
+	// Stack-based table handling for nested tables
+	var tableStack []*tableState
+	var currentTable *tableState
+
+	// Helper to get current cell
+	getCurrentCell := func() *cellContext {
+		if currentTable != nil {
+			return currentTable.cell
+		}
+		return nil
+	}
 
 	for {
 		token, err := decoder.Token()
@@ -217,8 +232,9 @@ func (p *Parser) parseSectionXML(doc *ir.Document, decoder *xml.Decoder) error {
 				// Text element - read content
 				if currentParagraph != nil {
 					text, _ := readElementText(decoder)
-					if currentCell != nil {
-						currentCell.text.WriteString(text)
+					cell := getCurrentCell()
+					if cell != nil {
+						cell.text.WriteString(text)
 					} else {
 						currentParagraph.Text += text
 					}
@@ -226,8 +242,9 @@ func (p *Parser) parseSectionXML(doc *ir.Document, decoder *xml.Decoder) error {
 
 			case "tab":
 				if currentParagraph != nil {
-					if currentCell != nil {
-						currentCell.text.WriteString("\t")
+					cell := getCurrentCell()
+					if cell != nil {
+						cell.text.WriteString("\t")
 					} else {
 						currentParagraph.Text += "\t"
 					}
@@ -242,8 +259,9 @@ func (p *Parser) parseSectionXML(doc *ir.Document, decoder *xml.Decoder) error {
 						}
 					}
 					if brType == "line" {
-						if currentCell != nil {
-							currentCell.text.WriteString("\n")
+						cell := getCurrentCell()
+						if cell != nil {
+							cell.text.WriteString("\n")
 						} else {
 							currentParagraph.Text += "\n"
 						}
@@ -251,33 +269,38 @@ func (p *Parser) parseSectionXML(doc *ir.Document, decoder *xml.Decoder) error {
 				}
 
 			case "tbl":
-				inTable = true
-				tableRows = nil
+				// Push current table state to stack (if any)
+				if currentTable != nil {
+					tableStack = append(tableStack, currentTable)
+				}
+				// Start new table
+				currentTable = &tableState{}
 
 			case "tr":
-				if inTable {
-					currentRow = nil
+				if currentTable != nil {
+					currentTable.currentRow = nil
 				}
 
 			case "tc":
-				if inTable {
+				if currentTable != nil {
 					cell := cellContext{colSpan: 1, rowSpan: 1}
 					// Note: colSpan and rowSpan are parsed from child cellSpan element
-					currentCell = &cell
+					currentTable.cell = &cell
 				}
 
 			case "cellSpan":
 				// Parse cell span information (colSpan and rowSpan)
-				if currentCell != nil {
+				cell := getCurrentCell()
+				if cell != nil {
 					for _, attr := range t.Attr {
 						switch attr.Name.Local {
 						case "colSpan":
-							if _, err := fmt.Sscanf(attr.Value, "%d", &currentCell.colSpan); err != nil {
-								currentCell.colSpan = 1
+							if _, err := fmt.Sscanf(attr.Value, "%d", &cell.colSpan); err != nil {
+								cell.colSpan = 1
 							}
 						case "rowSpan":
-							if _, err := fmt.Sscanf(attr.Value, "%d", &currentCell.rowSpan); err != nil {
-								currentCell.rowSpan = 1
+							if _, err := fmt.Sscanf(attr.Value, "%d", &cell.rowSpan); err != nil {
+								cell.rowSpan = 1
 							}
 						}
 					}
@@ -299,13 +322,14 @@ func (p *Parser) parseSectionXML(doc *ir.Document, decoder *xml.Decoder) error {
 			switch localName {
 			case "p":
 				if currentParagraph != nil && !currentParagraph.IsEmpty() {
-					if currentCell != nil {
+					cell := getCurrentCell()
+					if cell != nil {
 						// Inside table cell - accumulate text
-						if currentCell.text.Len() > 0 {
-							currentCell.text.WriteString("\n")
+						if cell.text.Len() > 0 {
+							cell.text.WriteString("\n")
 						}
-						currentCell.text.WriteString(currentParagraph.Text)
-					} else if !inTable {
+						cell.text.WriteString(currentParagraph.Text)
+					} else if currentTable == nil {
 						// Outside table - add to document
 						doc.AddParagraph(currentParagraph)
 					}
@@ -313,29 +337,78 @@ func (p *Parser) parseSectionXML(doc *ir.Document, decoder *xml.Decoder) error {
 				currentParagraph = nil
 
 			case "tc":
-				if currentCell != nil {
-					currentRow = append(currentRow, *currentCell)
-					currentCell = nil
+				if currentTable != nil && currentTable.cell != nil {
+					currentTable.currentRow = append(currentTable.currentRow, *currentTable.cell)
+					currentTable.cell = nil
 				}
 
 			case "tr":
-				if len(currentRow) > 0 {
-					tableRows = append(tableRows, currentRow)
-					currentRow = nil
+				if currentTable != nil && len(currentTable.currentRow) > 0 {
+					currentTable.rows = append(currentTable.rows, currentTable.currentRow)
+					currentTable.currentRow = nil
 				}
 
 			case "tbl":
-				if len(tableRows) > 0 {
-					table := p.buildTable(tableRows)
-					doc.AddTable(table)
+				if currentTable != nil && len(currentTable.rows) > 0 {
+					// Check if this is a nested table
+					if len(tableStack) > 0 {
+						// Convert nested table to text and add to parent cell
+						nestedText := p.convertTableToText(currentTable.rows)
+						// Pop parent table from stack
+						parentTable := tableStack[len(tableStack)-1]
+						tableStack = tableStack[:len(tableStack)-1]
+						// Add nested table text to parent cell
+						if parentTable.cell != nil {
+							if parentTable.cell.text.Len() > 0 {
+								parentTable.cell.text.WriteString("\n")
+							}
+							parentTable.cell.text.WriteString(nestedText)
+						}
+						currentTable = parentTable
+					} else {
+						// Top-level table - add to document
+						table := p.buildTable(currentTable.rows)
+						doc.AddTable(table)
+						currentTable = nil
+					}
+				} else {
+					// Empty table or no rows - restore parent if any
+					if len(tableStack) > 0 {
+						currentTable = tableStack[len(tableStack)-1]
+						tableStack = tableStack[:len(tableStack)-1]
+					} else {
+						currentTable = nil
+					}
 				}
-				inTable = false
-				tableRows = nil
 			}
 		}
 	}
 
 	return nil
+}
+
+// convertTableToText converts a table to text format for nested table handling.
+// This is used when a table is found inside another table cell.
+func (p *Parser) convertTableToText(rows [][]cellContext) string {
+	var sb strings.Builder
+
+	for _, row := range rows {
+		for i, cell := range row {
+			text := strings.TrimSpace(cell.text.String())
+			if text == "" {
+				continue
+			}
+			if i > 0 {
+				sb.WriteString(" | ")
+			}
+			// Replace newlines with spaces for inline display
+			text = strings.ReplaceAll(text, "\n", " ")
+			sb.WriteString(text)
+		}
+		sb.WriteString("\n")
+	}
+
+	return sb.String()
 }
 
 // cellContext holds temporary cell data during parsing.
