@@ -152,6 +152,18 @@ hwp2markdown/
 └── tests/                 # 테스트 데이터
 ```
 
+## 변환 품질 예시
+
+실제 변환 결과를 확인하여 품질을 평가할 수 있습니다.
+
+| 파일 | 설명 |
+|------|------|
+| [원본 HWPX](testdata/한글%20테스트.hwpx) | 테스트용 한글 문서 (공무원 채용 공고) |
+| [Stage 1 결과](testdata/한글%20테스트_stage1.md) | 파서만 사용한 기본 Markdown 변환 |
+| [Stage 2 결과](testdata/한글%20테스트_stage2.md) | LLM(Claude)을 사용한 포맷팅된 Markdown |
+
+Stage 1은 문서 구조를 그대로 추출하며, Stage 2는 LLM을 통해 더 읽기 쉬운 형태로 정리합니다.
+
 ## 문서
 
 - [PRD](docs/PRD.md) - 제품 요구사항
