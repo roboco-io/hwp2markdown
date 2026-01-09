@@ -12,7 +12,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        go-version: ["1.21", "1.22"]
+        go-version: ["1.24"]
 
     steps:
       - uses: actions/checkout@v4
@@ -28,8 +28,13 @@ jobs:
       - name: Build
         run: go build -v ./...
 
-      - name: Test
+      - name: Test (Unix)
+        if: runner.os != 'Windows'
         run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Test (Windows)
+        if: runner.os == 'Windows'
+        run: go test -v -race ./...
 
   lint:
     runs-on: ubuntu-latest
@@ -39,7 +44,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version: "1.24"
 
       - name: Lint
         uses: golangci/golangci-lint-action@v4
