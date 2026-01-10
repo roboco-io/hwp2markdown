@@ -1,13 +1,13 @@
 ---
 name: release
-description: Automates versioning and release notes generation for hwp2markdown. Use this skill when preparing a new release, creating version tags, or generating changelogs from git history.
+description: Automates versioning and release notes generation for hwp2md. Use this skill when preparing a new release, creating version tags, or generating changelogs from git history.
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob
 user-invocable: true
 ---
 
 # Release Automation Skill
 
-이 스킬은 hwp2markdown의 버저닝과 릴리즈 노트 생성을 자동화합니다.
+이 스킬은 hwp2md의 버저닝과 릴리즈를 자동화합니다.
 
 ## 사용법
 
@@ -53,51 +53,7 @@ else
 fi
 ```
 
-### 3. CHANGELOG.md 생성/업데이트
-
-CHANGELOG 형식 (Keep a Changelog):
-
-```markdown
-# Changelog
-
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [Unreleased]
-
-## [0.2.0] - 2024-01-15
-
-### Added
-- 새로운 기능 설명
-
-### Changed
-- 변경된 기능 설명
-
-### Fixed
-- 버그 수정 설명
-
-### Removed
-- 제거된 기능 설명
-
-## [0.1.0] - 2024-01-01
-
-### Added
-- Initial release
-```
-
-**커밋 메시지 → 카테고리 매핑:**
-| 커밋 접두사 | 카테고리 |
-|-------------|----------|
-| `Add`, `Implement`, `Create` | Added |
-| `Update`, `Change`, `Refactor`, `Improve` | Changed |
-| `Fix`, `Resolve`, `Correct` | Fixed |
-| `Remove`, `Delete`, `Drop` | Removed |
-| `Deprecate` | Deprecated |
-| `Security` | Security |
-
-### 4. 릴리즈 태그 생성
+### 3. 릴리즈 태그 생성
 
 ```bash
 # 태그 생성 (annotated tag)
@@ -113,7 +69,7 @@ git tag -a v0.2.0 -m "Release v0.2.0
 git push origin v0.2.0
 ```
 
-### 5. GitHub Release (선택)
+### 4. GitHub Release
 
 goreleaser를 사용한 릴리즈:
 ```bash
@@ -130,26 +86,9 @@ goreleaser release --clean
 
 - [ ] 모든 테스트 통과 (`make test`)
 - [ ] 린트 검사 통과 (`make lint`)
-- [ ] CHANGELOG.md 업데이트
 - [ ] README.md 버전 정보 확인
 - [ ] main 브랜치에 모든 변경사항 병합
 - [ ] 이전 릴리즈 이후 breaking change 확인
-
-## 자동 릴리즈 노트 생성
-
-커밋 히스토리 기반 릴리즈 노트:
-
-```bash
-# 커밋을 카테고리별로 분류
-git log $LAST_TAG..HEAD --pretty=format:"%s" | while read msg; do
-  case "$msg" in
-    Add*|Implement*|Create*) echo "### Added"; echo "- $msg" ;;
-    Update*|Change*|Refactor*) echo "### Changed"; echo "- $msg" ;;
-    Fix*) echo "### Fixed"; echo "- $msg" ;;
-    Remove*|Delete*) echo "### Removed"; echo "- $msg" ;;
-  esac
-done
-```
 
 ## 예시: 전체 릴리즈 워크플로우
 
@@ -164,18 +103,12 @@ git describe --tags --abbrev=0
 # 3. 변경사항 확인
 git log $(git describe --tags --abbrev=0)..HEAD --oneline
 
-# 4. CHANGELOG 업데이트 (수동 또는 자동)
-
-# 5. 변경사항 커밋
-git add CHANGELOG.md
-git commit -m "docs: Update CHANGELOG for v0.2.0"
-
-# 6. 태그 생성 및 푸시
+# 4. 태그 생성 및 푸시
 git tag -a v0.2.0 -m "Release v0.2.0"
 git push origin main
 git push origin v0.2.0
 
-# 7. GitHub Actions가 자동으로 goreleaser 실행
+# 5. GitHub Actions가 자동으로 goreleaser 실행
 ```
 
 ## GitHub Actions 자동 릴리즈
@@ -202,21 +135,14 @@ goreleaser가 커밋 메시지를 분석하여 카테고리별로 정리:
 ### 릴리즈 실행 방법
 
 ```bash
-# 1. CHANGELOG.md 업데이트
-# [Unreleased] 섹션의 내용을 새 버전 섹션으로 이동
-
-# 2. CHANGELOG 변경 커밋
-git add CHANGELOG.md
-git commit -m "docs: Update CHANGELOG for v0.2.0"
-
-# 3. 태그 생성
+# 1. 태그 생성
 git tag -a v0.2.0 -m "Release v0.2.0"
 
-# 4. main과 태그 푸시
+# 2. main과 태그 푸시
 git push origin main
 git push origin v0.2.0
 
-# 5. GitHub Actions가 자동으로:
+# 3. GitHub Actions가 자동으로:
 #    - 바이너리 빌드
 #    - 릴리즈 페이지 생성
 #    - 릴리즈 노트 생성
