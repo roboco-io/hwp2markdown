@@ -1,17 +1,34 @@
 #!/bin/bash
 # Pre-commit hook for hwp2markdown
-# Runs unit tests and lint before allowing commit
+# Runs gofmt, lint, and unit tests before allowing commit
 
 set -e
 
 echo "Running pre-commit checks..."
 
+# Check gofmt formatting (always runs, regardless of golangci-lint)
+echo "==> Checking gofmt formatting..."
+UNFORMATTED=$(gofmt -l . 2>/dev/null | grep -v vendor || true)
+if [ -n "$UNFORMATTED" ]; then
+    echo "Error: The following files are not properly formatted:"
+    echo "$UNFORMATTED"
+    echo ""
+    echo "Run 'gofmt -w .' to fix formatting"
+    exit 1
+fi
+echo "    gofmt check passed"
+
 # Run linting
 echo "==> Running lint..."
 if command -v golangci-lint &> /dev/null; then
-    golangci-lint run --timeout 5m
+    if golangci-lint run --timeout 5m 2>/dev/null; then
+        echo "    lint check passed"
+    else
+        echo "Error: golangci-lint failed"
+        exit 1
+    fi
 else
-    echo "Warning: golangci-lint not installed, skipping lint"
+    echo "    Warning: golangci-lint not installed, skipping lint"
 fi
 
 # Run unit tests (exclude e2e tests)
