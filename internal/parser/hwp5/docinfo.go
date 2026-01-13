@@ -7,8 +7,8 @@ import (
 
 // DocInfo는 문서 정보 스트림에서 파싱된 데이터
 type DocInfo struct {
-	Properties *DocumentProperties
-	IDMappings *IDMappings
+	Properties  *DocumentProperties
+	IDMappings  *IDMappings
 	BinDataList []*BinDataInfo
 	FaceNames   []string
 	CharShapes  []*CharShape
@@ -32,74 +32,74 @@ type DocumentProperties struct {
 
 // IDMappings는 ID 매핑 테이블 크기 (HWPTAG_ID_MAPPINGS)
 type IDMappings struct {
-	BinDataCount      int32
-	FaceNameKorCount  int32
-	FaceNameEngCount  int32
-	FaceNameHanCount  int32
-	FaceNameJpnCount  int32
-	FaceNameOtherCount int32
-	FaceNameSymCount  int32
-	FaceNameUserCount int32
-	BorderFillCount   int32
-	CharShapeCount    int32
-	TabDefCount       int32
-	NumberingCount    int32
-	BulletCount       int32
-	ParaShapeCount    int32
-	StyleCount        int32
-	MemoShapeCount    int32
-	TrackChangeCount  int32
+	BinDataCount           int32
+	FaceNameKorCount       int32
+	FaceNameEngCount       int32
+	FaceNameHanCount       int32
+	FaceNameJpnCount       int32
+	FaceNameOtherCount     int32
+	FaceNameSymCount       int32
+	FaceNameUserCount      int32
+	BorderFillCount        int32
+	CharShapeCount         int32
+	TabDefCount            int32
+	NumberingCount         int32
+	BulletCount            int32
+	ParaShapeCount         int32
+	StyleCount             int32
+	MemoShapeCount         int32
+	TrackChangeCount       int32
 	TrackChangeAuthorCount int32
 }
 
 // BinDataInfo는 바이너리 데이터 정보 (HWPTAG_BIN_DATA)
 type BinDataInfo struct {
-	Type       uint16 // 바이너리 데이터 타입
-	AbsPath    string // 절대 경로
-	RelPath    string // 상대 경로
-	BinDataID  uint16 // BinData 스토리지 내 ID
-	Extension  string // 확장자
+	Type      uint16 // 바이너리 데이터 타입
+	AbsPath   string // 절대 경로
+	RelPath   string // 상대 경로
+	BinDataID uint16 // BinData 스토리지 내 ID
+	Extension string // 확장자
 }
 
 // CharShape는 글자 모양 (HWPTAG_CHAR_SHAPE)
 type CharShape struct {
-	FaceID      [7]uint16 // 언어별 글꼴 ID
-	Ratios      [7]uint8  // 언어별 장평
-	Spacings    [7]int8   // 언어별 자간
-	RelSizes    [7]uint8  // 언어별 상대 크기
-	Offsets     [7]int8   // 언어별 오프셋
-	Height      int32     // 기준 크기 (100분의 1pt)
-	Attributes  uint32    // 속성 플래그
-	ShadowGap1  int8      // 그림자 간격 1
-	ShadowGap2  int8      // 그림자 간격 2
-	TextColor   uint32    // 글자 색
-	UnderColor  uint32    // 밑줄 색
-	ShadeColor  uint32    // 음영 색
-	ShadowColor uint32    // 그림자 색
-	BorderFillID uint16   // 테두리/배경 ID
-	StrikeColor uint32    // 취소선 색
+	FaceID       [7]uint16 // 언어별 글꼴 ID
+	Ratios       [7]uint8  // 언어별 장평
+	Spacings     [7]int8   // 언어별 자간
+	RelSizes     [7]uint8  // 언어별 상대 크기
+	Offsets      [7]int8   // 언어별 오프셋
+	Height       int32     // 기준 크기 (100분의 1pt)
+	Attributes   uint32    // 속성 플래그
+	ShadowGap1   int8      // 그림자 간격 1
+	ShadowGap2   int8      // 그림자 간격 2
+	TextColor    uint32    // 글자 색
+	UnderColor   uint32    // 밑줄 색
+	ShadeColor   uint32    // 음영 색
+	ShadowColor  uint32    // 그림자 색
+	BorderFillID uint16    // 테두리/배경 ID
+	StrikeColor  uint32    // 취소선 색
 }
 
 // ParaShape는 문단 모양 (HWPTAG_PARA_SHAPE)
 type ParaShape struct {
-	Attributes1     uint32  // 속성 1
-	LeftMargin      int32   // 왼쪽 여백
-	RightMargin     int32   // 오른쪽 여백
-	Indent          int32   // 들여쓰기
-	ParaSpaceBefore int32   // 문단 위 간격
-	ParaSpaceAfter  int32   // 문단 아래 간격
-	LineSpacing     int32   // 줄 간격
-	TabDefID        uint16  // 탭 정의 ID
-	NumberingID     uint16  // 문단 번호 ID
-	BorderFillID    uint16  // 테두리/배경 ID
-	BorderOffset1   int16   // 테두리 왼쪽 오프셋
-	BorderOffset2   int16   // 테두리 오른쪽 오프셋
-	BorderOffset3   int16   // 테두리 위 오프셋
-	BorderOffset4   int16   // 테두리 아래 오프셋
-	Attributes2     uint32  // 속성 2
-	Attributes3     uint32  // 속성 3
-	LineWrap        uint32  // 줄 나눔 기준
-	AutoSpacing     uint32  // 자동 줄 간격
+	Attributes1     uint32 // 속성 1
+	LeftMargin      int32  // 왼쪽 여백
+	RightMargin     int32  // 오른쪽 여백
+	Indent          int32  // 들여쓰기
+	ParaSpaceBefore int32  // 문단 위 간격
+	ParaSpaceAfter  int32  // 문단 아래 간격
+	LineSpacing     int32  // 줄 간격
+	TabDefID        uint16 // 탭 정의 ID
+	NumberingID     uint16 // 문단 번호 ID
+	BorderFillID    uint16 // 테두리/배경 ID
+	BorderOffset1   int16  // 테두리 왼쪽 오프셋
+	BorderOffset2   int16  // 테두리 오른쪽 오프셋
+	BorderOffset3   int16  // 테두리 위 오프셋
+	BorderOffset4   int16  // 테두리 아래 오프셋
+	Attributes2     uint32 // 속성 2
+	Attributes3     uint32 // 속성 3
+	LineWrap        uint32 // 줄 나눔 기준
+	AutoSpacing     uint32 // 자동 줄 간격
 }
 
 // Style은 스타일 정의 (HWPTAG_STYLE)
@@ -184,23 +184,23 @@ func parseIDMappings(data []byte) *IDMappings {
 	}
 
 	return &IDMappings{
-		BinDataCount:      int32(binary.LittleEndian.Uint32(data[0:4])),
-		FaceNameKorCount:  int32(binary.LittleEndian.Uint32(data[4:8])),
-		FaceNameEngCount:  int32(binary.LittleEndian.Uint32(data[8:12])),
-		FaceNameHanCount:  int32(binary.LittleEndian.Uint32(data[12:16])),
-		FaceNameJpnCount:  int32(binary.LittleEndian.Uint32(data[16:20])),
-		FaceNameOtherCount: int32(binary.LittleEndian.Uint32(data[20:24])),
-		FaceNameSymCount:  int32(binary.LittleEndian.Uint32(data[24:28])),
-		FaceNameUserCount: int32(binary.LittleEndian.Uint32(data[28:32])),
-		BorderFillCount:   int32(binary.LittleEndian.Uint32(data[32:36])),
-		CharShapeCount:    int32(binary.LittleEndian.Uint32(data[36:40])),
-		TabDefCount:       int32(binary.LittleEndian.Uint32(data[40:44])),
-		NumberingCount:    int32(binary.LittleEndian.Uint32(data[44:48])),
-		BulletCount:       int32(binary.LittleEndian.Uint32(data[48:52])),
-		ParaShapeCount:    int32(binary.LittleEndian.Uint32(data[52:56])),
-		StyleCount:        int32(binary.LittleEndian.Uint32(data[56:60])),
-		MemoShapeCount:    int32(binary.LittleEndian.Uint32(data[60:64])),
-		TrackChangeCount:  int32(binary.LittleEndian.Uint32(data[64:68])),
+		BinDataCount:           int32(binary.LittleEndian.Uint32(data[0:4])),
+		FaceNameKorCount:       int32(binary.LittleEndian.Uint32(data[4:8])),
+		FaceNameEngCount:       int32(binary.LittleEndian.Uint32(data[8:12])),
+		FaceNameHanCount:       int32(binary.LittleEndian.Uint32(data[12:16])),
+		FaceNameJpnCount:       int32(binary.LittleEndian.Uint32(data[16:20])),
+		FaceNameOtherCount:     int32(binary.LittleEndian.Uint32(data[20:24])),
+		FaceNameSymCount:       int32(binary.LittleEndian.Uint32(data[24:28])),
+		FaceNameUserCount:      int32(binary.LittleEndian.Uint32(data[28:32])),
+		BorderFillCount:        int32(binary.LittleEndian.Uint32(data[32:36])),
+		CharShapeCount:         int32(binary.LittleEndian.Uint32(data[36:40])),
+		TabDefCount:            int32(binary.LittleEndian.Uint32(data[40:44])),
+		NumberingCount:         int32(binary.LittleEndian.Uint32(data[44:48])),
+		BulletCount:            int32(binary.LittleEndian.Uint32(data[48:52])),
+		ParaShapeCount:         int32(binary.LittleEndian.Uint32(data[52:56])),
+		StyleCount:             int32(binary.LittleEndian.Uint32(data[56:60])),
+		MemoShapeCount:         int32(binary.LittleEndian.Uint32(data[60:64])),
+		TrackChangeCount:       int32(binary.LittleEndian.Uint32(data[64:68])),
 		TrackChangeAuthorCount: int32(binary.LittleEndian.Uint32(data[68:72])),
 	}
 }
@@ -233,7 +233,6 @@ func parseBinDataInfo(data []byte) *BinDataInfo {
 			offset += 2
 			if offset+relPathLen*2 <= len(data) {
 				info.RelPath = DecodeUTF16LE(data[offset : offset+relPathLen*2])
-				offset += relPathLen * 2
 			}
 		}
 	case 1: // EMBEDDING - BinData ID
@@ -426,7 +425,6 @@ func parseStyle(data []byte) *Style {
 	// 글자 모양 ID (2 bytes)
 	if offset+2 <= len(data) {
 		style.CharShapeID = binary.LittleEndian.Uint16(data[offset : offset+2])
-		offset += 2
 	}
 
 	return style

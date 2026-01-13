@@ -29,18 +29,18 @@ const (
 
 // 스트림 이름
 const (
-	StreamFileHeader    = "FileHeader"
-	StreamDocInfo       = "DocInfo"
-	StreamBodyText      = "BodyText"
-	StreamViewText      = "ViewText"
-	StreamSummaryInfo   = "\x05HwpSummaryInformation"
-	StreamBinData       = "BinData"
-	StreamPrvText       = "PrvText"
-	StreamPrvImage      = "PrvImage"
-	StreamDocOptions    = "DocOptions"
-	StreamScripts       = "Scripts"
-	StreamXMLTemplate   = "XMLTemplate"
-	StreamDocHistory    = "DocHistory"
+	StreamFileHeader  = "FileHeader"
+	StreamDocInfo     = "DocInfo"
+	StreamBodyText    = "BodyText"
+	StreamViewText    = "ViewText"
+	StreamSummaryInfo = "\x05HwpSummaryInformation"
+	StreamBinData     = "BinData"
+	StreamPrvText     = "PrvText"
+	StreamPrvImage    = "PrvImage"
+	StreamDocOptions  = "DocOptions"
+	StreamScripts     = "Scripts"
+	StreamXMLTemplate = "XMLTemplate"
+	StreamDocHistory  = "DocHistory"
 )
 
 // 레코드 태그 ID (HWPTAG_*)

@@ -428,20 +428,6 @@ func (sp *SectionParser) parseTableRecord(data []byte) *Table {
 	return table
 }
 
-func (sp *SectionParser) parsePicture(data []byte) *Image {
-	if len(data) < 18 {
-		return nil
-	}
-
-	img := &Image{
-		BorderColor: binary.LittleEndian.Uint32(data[0:4]),
-		Width:       int32(binary.LittleEndian.Uint32(data[4:8])),
-		Height:      int32(binary.LittleEndian.Uint32(data[8:12])),
-	}
-
-	return img
-}
-
 // GetCellText returns the text content of a cell.
 func (c *TableCell) GetCellText() string {
 	if c == nil || len(c.Paragraphs) == 0 {

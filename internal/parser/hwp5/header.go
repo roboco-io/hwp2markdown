@@ -9,9 +9,9 @@ import (
 // FileHeader는 HWP 5.x 파일 헤더 구조체
 // 참조: HWP 5.0 명세서 2.1 파일 인식 정보
 type FileHeader struct {
-	Signature   [32]byte // 파일 시그니처 "HWP Document File"
-	Version     Version  // 파일 버전
-	Flags       uint32   // 속성 플래그
+	Signature   [32]byte  // 파일 시그니처 "HWP Document File"
+	Version     Version   // 파일 버전
+	Flags       uint32    // 속성 플래그
 	LicenseInfo [216]byte // 예약 영역
 }
 
