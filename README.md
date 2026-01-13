@@ -210,13 +210,9 @@ hwp2md convert document.hwpx --llm --model llama3.2 --base-url http://localhost:
 | `upstage` | solar-pro | Upstage Solar |
 | `ollama` | llama3.2 | 로컬 Ollama 서버 |
 
-## 개발
+## 컨트리뷰션
 
-### 요구사항
-
-- Go 1.24 이상
-
-### 빌드
+### 개발 환경 설정
 
 ```bash
 # 저장소 클론
@@ -226,15 +222,107 @@ cd hwp2md
 # 의존성 다운로드
 go mod download
 
+# Git hooks 설치 (필수)
+make hooks
+
 # 빌드
 make build
+```
 
-# 테스트
+### 요구사항
+
+- Go 1.24 이상
+- [golangci-lint](https://golangci-lint.run/welcome/install/) (lint 검사)
+- [Claude Code](https://claude.ai/code) (권장) - AI 페어 프로그래밍 도구
+
+> **권장**: 이 프로젝트는 [Claude Code](https://claude.ai/code)를 활용한 AI 협업 개발로 진행되었습니다. 복잡한 파서 로직이나 새로운 기능 구현 시 Claude Code 사용을 권장합니다. 자세한 내용은 [바이브 코딩 튜토리얼](docs/vibe-coding-tutorial.md)을 참조하세요.
+
+### 개발 워크플로우
+
+```mermaid
+flowchart LR
+    subgraph Local[로컬 개발]
+        Code[코드 작성] --> Commit[git commit]
+        Commit --> Push[git push]
+    end
+
+    subgraph Hooks[Git Hooks]
+        PreCommit[pre-commit]
+        PrePush[pre-push]
+    end
+
+    subgraph CI[GitHub Actions]
+        Test[Test Workflow]
+        Release[Release Workflow]
+    end
+
+    subgraph Checks[검증 항목]
+        UT[Unit Tests]
+        Lint[golangci-lint]
+        E2E[E2E Tests]
+    end
+
+    Commit --> PreCommit
+    PreCommit --> UT
+    PreCommit --> Lint
+    UT --> |통과| Push
+    Lint --> |통과| Push
+
+    Push --> PrePush
+    PrePush --> E2E
+    E2E --> |통과| CI
+
+    CI --> Test
+    Test --> |main 브랜치| Release
+    Release --> |v* 태그| Binary[바이너리 배포]
+```
+
+### Git Hooks
+
+`make hooks`로 설치되는 Git hooks가 코드 품질을 자동으로 검증합니다:
+
+| Hook | 실행 시점 | 검증 항목 | 실패 시 |
+|------|----------|----------|--------|
+| **pre-commit** | 커밋 전 | Unit Tests + Lint | 커밋 차단 |
+| **pre-push** | 푸시 전 | E2E Tests | 푸시 차단 |
+
+```bash
+# hooks 설치
+make hooks
+
+# 수동 실행
+make test      # unit tests + e2e tests
+make lint      # golangci-lint
+make test-e2e  # e2e tests만
+```
+
+### 테스트 구조
+
+| 종류 | 경로 | 설명 |
+|------|------|------|
+| **Unit Tests** | `internal/*/` | 패키지별 단위 테스트 |
+| **E2E Tests** | `tests/` | CLI 통합 테스트, LLM 연동 테스트 |
+
+```bash
+# 전체 테스트
 make test
 
-# 린트 (golangci-lint 필요)
-make lint
+# unit tests만
+go test -race ./internal/...
+
+# e2e tests만
+go test -race ./tests/...
+
+# 특정 테스트
+go test -v -run TestName ./internal/parser/hwpx/
 ```
+
+### GitHub Actions
+
+| Workflow | 트리거 | 동작 |
+|----------|--------|------|
+| **Test** | push, PR | lint + unit tests + e2e tests |
+| **Release** | `v*` 태그 | goreleaser로 크로스 플랫폼 바이너리 빌드 및 배포 |
 
 ### 프로젝트 구조
 
